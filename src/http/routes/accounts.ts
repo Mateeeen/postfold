@@ -1,6 +1,12 @@
 import { Router } from 'express';
 import { LIMITS } from '../../policy.js';
-import { listAccounts, updateAccount } from '../../db/accounts.js';
+import {
+  backfillNoteUsage,
+  createAccount,
+  listAccounts,
+  updateAccount,
+} from '../../db/accounts.js';
+import { getAccountOwner, listConnectableAccounts } from '../../providers/index.js';
 import { getAccountState } from '../../state.js';
 import { ownsAccount, resolveAccountId } from '../auth.js';
 import { asyncHandler, badRequest, notFound, param, refused } from '../util.js';
@@ -90,6 +96,112 @@ accountsRouter.post(
       checkpointUntil: null,
     });
     res.json(await getAccountState(id));
+  }),
+);
+
+/**
+ * Accounts linked at the provider that this instance could adopt.
+ *
+ * Onboarding has to be reachable over HTTP: on a deployed instance the
+ * database lives on a volume the connect CLI cannot touch.
+ */
+accountsRouter.get(
+  '/api/accounts/connectable',
+  asyncHandler(async (req, res) => {
+    const linked = await listConnectableAccounts();
+    const existing = await listAccounts(req.userId);
+    const known = new Set(existing.map((a) => a.providerAccountId));
+    res.json({
+      accounts: linked.map((a) => ({
+        providerAccountId: a.providerAccountId,
+        displayName: a.displayName,
+        network: a.network,
+        health: a.health,
+        alreadyConnected: known.has(a.providerAccountId),
+      })),
+    });
+  }),
+);
+
+/**
+ * Adopt a linked provider account.
+ *
+ * Mirrors scripts/connect.ts deliberately: `connectedAt` is now, so the
+ * warm-up ladder starts at day 1 on this instance regardless of how old the
+ * platform account is, and sending starts OFF until a human turns it on.
+ */
+accountsRouter.post(
+  '/api/accounts/connect',
+  asyncHandler(async (req, res) => {
+    const wanted =
+      typeof req.body?.providerAccountId === 'string'
+        ? req.body.providerAccountId.trim()
+        : '';
+    if (wanted === '') return badRequest(res, 'providerAccountId is required.');
+
+    const timezone =
+      typeof req.body?.timezone === 'string' && req.body.timezone.trim() !== ''
+        ? req.body.timezone.trim()
+        : 'UTC';
+
+    const linked = await listConnectableAccounts();
+    const target = linked.find((a) => a.providerAccountId === wanted);
+    if (!target) return notFound(res, 'No linked account with that id.');
+
+    const account = await createAccount({
+      userId: req.userId,
+      providerAccountId: target.providerAccountId,
+      displayName: target.displayName,
+      connectedAt: new Date(),
+      timezone,
+    });
+
+    let ownerPersonId: string | null = null;
+    let isPremium: boolean | null = null;
+    let headline: string | null = null;
+    try {
+      const owner = await getAccountOwner(target.providerAccountId);
+      ownerPersonId = owner?.providerPersonId ?? null;
+      isPremium = owner?.isPremium ?? null;
+      headline = owner?.headline ?? null;
+    } catch {
+      // Not fatal: self-filtering and tier-aware caps degrade, the account works.
+    }
+
+    await updateAccount(account.id, {
+      ownerPersonId,
+      isPremium,
+      headline,
+      sendingEnabled: false,
+      status: target.health.status === 'active' ? 'paused' : target.health.status,
+      pausedReason:
+        'Newly connected. Check the account state, then press Resume to start sending.',
+    });
+
+    res.status(201).json(await getAccountState(account.id));
+  }),
+);
+
+/**
+ * Record invites sent before this instance existed.
+ *
+ * Without this a fresh deployment believes the full monthly note allowance is
+ * unspent, while the platform disagrees — and the difference is silently
+ * overspending a limit that is only five on a free account.
+ */
+accountsRouter.post(
+  '/api/accounts/:id/backfill-invites',
+  asyncHandler(async (req, res) => {
+    const id = param(req, 'id');
+    if (!(await ownsAccount(req, id))) return notFound(res, 'No such account');
+
+    const count = Number(req.body?.withNoteLast30d);
+    if (!Number.isInteger(count) || count < 0 || count > 200) {
+      return badRequest(res, 'withNoteLast30d must be an integer between 0 and 200.');
+    }
+
+    const inserted = await backfillNoteUsage(id, count);
+    res.json({ inserted, account: await getAccountState(id) });
   }),
 );
 

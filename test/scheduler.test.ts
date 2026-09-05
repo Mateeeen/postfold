@@ -4,9 +4,10 @@
  */
 
 import { afterEach, describe, expect, it } from 'vitest';
-import { updateAccount } from '../src/db/accounts.js';
+import { backfillNoteUsage, getUsage, updateAccount } from '../src/db/accounts.js';
 import { isInsideWindow, LIMITS } from '../src/policy.js';
 import { enqueue } from '../src/queue/scheduler.js';
+import { getAccountState } from '../src/state.js';
 import { addSuggestion, fixture, invitePayload } from './helpers.js';
 import type { Fixture } from './helpers.js';
 
@@ -444,5 +445,43 @@ describe('enqueue: retry after a terminal attempt', () => {
 
     const n = f.db.prepare('SELECT COUNT(*) AS n FROM actions').get() as { n: number };
     expect(n.n).toBe(1);
+  });
+});
+
+describe('note backfill', () => {
+  it('counts pre-existing invites against the monthly allowance', async () => {
+    // A fresh deployment has an empty invites table but the platform still
+    // remembers what was sent. Without this, a free account believes it has
+    // all five notes left and overspends a real limit.
+    const f = await setup({ premium: false });
+
+    const before = await getUsage(f.account.id, 'send_invite', f.db);
+    expect(before.invitesWithNoteLast30d).toBe(0);
+
+    await backfillNoteUsage(f.account.id, 2, f.db);
+
+    const after = await getUsage(f.account.id, 'send_invite', f.db);
+    expect(after.invitesWithNoteLast30d).toBe(2);
+
+    const state = await getAccountState(f.account.id, new Date(), f.db);
+    expect(state?.notesRemaining).toBe(LIMITS.FREE_WITH_NOTE_MONTHLY_CAP - 2);
+  });
+
+  it('is idempotent — it sets the count, it does not add to it', async () => {
+    const f = await setup({ premium: false });
+    await backfillNoteUsage(f.account.id, 2, f.db);
+    await backfillNoteUsage(f.account.id, 2, f.db);
+    const usage = await getUsage(f.account.id, 'send_invite', f.db);
+    expect(usage.invitesWithNoteLast30d).toBe(2);
+  });
+
+  it('leaves the acceptance rate alone', async () => {
+    // The backfill must never look like a sent invite, or it would drag the
+    // acceptance rate down and throttle the account on invented evidence.
+    const f = await setup({ premium: false });
+    await backfillNoteUsage(f.account.id, 5, f.db);
+    const usage = await getUsage(f.account.id, 'send_invite', f.db);
+    expect(usage.acceptanceSample).toBe(0);
+    expect(usage.acceptanceRate).toBeNull();
   });
 });

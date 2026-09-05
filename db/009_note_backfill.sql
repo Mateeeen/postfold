@@ -1,0 +1,11 @@
+-- Note-bearing invites sent before this instance existed.
+--
+-- A fresh deployment counts invites from its own `invites` table, so it
+-- believes the whole monthly allowance is unspent while the platform knows
+-- otherwise. On a free account that allowance is five, so the gap is the
+-- difference between staying inside a real limit and silently blowing it.
+--
+-- A counter rather than placeholder invite rows: `invites` requires a real
+-- action_id and is unique per person, and inventing rows to satisfy both would
+-- put fiction into a table the acceptance rate is computed from.
+ALTER TABLE accounts ADD COLUMN note_backfill INTEGER NOT NULL DEFAULT 0;

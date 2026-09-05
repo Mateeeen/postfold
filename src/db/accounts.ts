@@ -188,6 +188,26 @@ export async function updateAccount(
   db.prepare(`UPDATE accounts SET ${sets.join(', ')} WHERE id = @id`).run(params);
 }
 
+/**
+ * Record how many note-bearing invites were sent before this instance existed.
+ *
+ * Counted alongside real invites when the note allowance is computed. Stored
+ * as a number on the account rather than as invite rows, because `invites`
+ * feeds the acceptance rate and must contain only invites we actually sent.
+ */
+export async function backfillNoteUsage(
+  accountId: string,
+  count: number,
+  db: Db = getDb(),
+): Promise<number> {
+  db.prepare('UPDATE accounts SET note_backfill = ?, updated_at = ? WHERE id = ?').run(
+    count,
+    nowIso(),
+    accountId,
+  );
+  return count;
+}
+
 /* --- Counters for policy.budget() -------------------------------------- */
 
 export interface AccountUsage {
@@ -237,13 +257,18 @@ export async function getUsage(
     )
     .get(accountId) as { n: number };
 
+  // Invites this instance never saw still count against the platform's limit.
+  const backfill = db
+    .prepare('SELECT note_backfill AS n FROM accounts WHERE id = ?')
+    .get(accountId) as { n: number } | undefined;
+
   return {
     sentLast24h: done.d1,
     sentLast7d: done.d7,
     pendingSameKind: pending.n,
     acceptanceRate: acceptance.rate,
     acceptanceSample: acceptance.sample,
-    invitesWithNoteLast30d: withNote.n,
+    invitesWithNoteLast30d: withNote.n + (backfill?.n ?? 0),
   };
 }
 

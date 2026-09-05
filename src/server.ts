@@ -28,7 +28,17 @@ export function createApp(): express.Express {
   // Unauthenticated: the platform healthcheck has to reach it, and it exposes
   // nothing beyond liveness.
   app.get('/api/health', (_req, res) => {
-    res.json({ ok: true, provider: getProvider().name, fake: usingFakeProvider });
+    // The commit is reported so "is my deploy live?" is a single call rather
+    // than an inference from behaviour. Railway injects these; they are absent
+    // locally.
+    res.json({
+      ok: true,
+      provider: getProvider().name,
+      fake: usingFakeProvider,
+      commit: (process.env['RAILWAY_GIT_COMMIT_SHA'] ?? 'local').slice(0, 7),
+      deployedAt: process.env['RAILWAY_DEPLOYMENT_ID'] ? undefined : 'local',
+      gated: config.appToken !== null,
+    });
   });
 
   // Everything past this point can act on a real LinkedIn account.

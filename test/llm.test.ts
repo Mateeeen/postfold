@@ -178,6 +178,33 @@ describe('draftComment prompt', () => {
     expect(body).toContain('Do not repeat a point made above');
   });
 
+  it('offers the experience move only when there are writing samples', async () => {
+    const withSamples = capturing();
+    await withSamples.llm.draftComment({
+      author: { ...author, recentPosts: ['I once rewrote a scheduler and regretted it.'] },
+      post: { ...basePost, priorComments: [] },
+      maxChars: 400,
+    });
+    expect(withSamples.sent()).toContain('experience');
+    expect(withSamples.sent()).toContain('three moves');
+  });
+
+  it('withholds the experience move, and says why, when there are none', async () => {
+    // Grounding for "experience" is the samples themselves. With none, the
+    // source is an empty string and every such draft is discarded - so the
+    // move is not offered, and the model is told it knows nothing about them.
+    const noSamples = capturing();
+    await noSamples.llm.draftComment({
+      author: { ...author, recentPosts: [] },
+      post: { ...basePost, priorComments: [] },
+      maxChars: 400,
+    });
+    const body = noSamples.sent();
+    expect(body).toContain('two moves');
+    expect(body).not.toContain('\"experience\"');
+    expect(body).toContain('Do not claim or imply personal experience');
+  });
+
   it('says nothing about a thread when there are no comments', async () => {
     const { llm, sent } = capturing();
     await llm.draftComment({

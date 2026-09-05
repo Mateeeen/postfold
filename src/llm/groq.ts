@@ -101,6 +101,43 @@ export function groundedIn(quote: string, source: string): boolean {
   return false;
 }
 
+/**
+ * Which moves the author's own material can actually support.
+ *
+ * The experience move is grounded against the author's writing samples. With
+ * no samples that source is an empty string, so every experience draft fails
+ * the grounding check and is thrown away - the model spends its attempt on a
+ * move it cannot land, and what survives is almost always a question. Not
+ * offering the move is cheaper than discarding what it produces, and it is
+ * also the honest position: with no samples we know nothing about what this
+ * person has done, so neither does the model.
+ */
+function movesFor(author: AuthorContext): string[] {
+  const hasSamples = author.recentPosts.length > 0;
+
+  const moves = [
+    '  "question"  - ask about something specific the post actually says',
+    '  "tradeoff"  - name a tradeoff that follows from the post\'s own content',
+  ];
+  if (hasSamples) {
+    moves.push(
+      '  "experience" - relate something that appears in this person\'s own writing samples',
+    );
+  }
+
+  return [
+    `You may ONLY make one of these ${hasSamples ? 'three' : 'two'} moves:`,
+    ...moves,
+    ...(hasSamples
+      ? []
+      : [
+          '',
+          'There are no writing samples for this person, so you know nothing about',
+          'what they have done. Do not claim or imply personal experience.',
+        ]),
+  ];
+}
+
 function describePost(p: SourcePost): string {
   return [
     `Author: ${p.authorName}${p.authorHeadline ? ` — ${p.authorHeadline}` : ''}`,
@@ -329,10 +366,7 @@ export class GroqLlm implements LlmProvider {
         '',
         describePost(input.post),
         '',
-        'You may ONLY make one of these three moves:',
-        '  "question"  — ask about something specific the post actually says',
-        '  "experience" — relate something that appears in this person\'s own writing samples',
-        '  "tradeoff"  — name a tradeoff that follows logically from the post\'s own content',
+        ...movesFor(input.author),
         '',
         'HARD RULE: do not state any fact about a tool, product, company, version,',
         'benchmark, or person that is not written in the post above or in the samples.',

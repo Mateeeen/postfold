@@ -107,6 +107,36 @@ function describePost(p: SourcePost): string {
     `Engagement: ${p.reactions} reactions, ${p.comments} comments`,
     `Matched keyword: ${p.keyword}`,
     `Post:\n${p.text.slice(0, 2000)}`,
+    describeThread(p.priorComments),
+  ]
+    .filter((part) => part !== '')
+    .join('\n');
+}
+
+/**
+ * The comments already under the post.
+ *
+ * These were always fetched and, until this was fixed, never shown to the
+ * model - which is why drafts kept restating points the thread had already
+ * made. Both jobs are spelled out to the model because it will not infer
+ * them: do not repeat what is here, and match the register. A thread of
+ * one-liners is not a place for three paragraphs.
+ */
+function describeThread(comments: SourcePost['priorComments']): string {
+  if (comments.length === 0) return '';
+
+  const lines = comments.slice(0, 8).map((c) => {
+    const who = c.authorHeadline ? `${c.authorName} (${c.authorHeadline})` : c.authorName;
+    return `- ${who}: ${c.text.replace(/\s+/g, ' ').trim().slice(0, 300)}`;
+  });
+
+  return [
+    '',
+    `Already said under this post (${comments.length} so far):`,
+    ...lines,
+    '',
+    'Do not repeat a point made above. If everything worth saying has been said,',
+    'answer worth_commenting: false. Match the length and register of this thread.',
   ].join('\n');
 }
 

@@ -14,6 +14,7 @@
 
 import { ProviderError } from '../provider.js';
 import type {
+  AuthoredPost,
   AccountHealth,
   FoundPost,
   ExistingComment,
@@ -39,6 +40,8 @@ export interface FakeCall {
 }
 
 export interface FakeProviderOptions {
+  /** Voice samples returned by listAuthoredPosts. */
+  authoredPosts?: AuthoredPost[];
   /** Set to have the next call throw. Consumed on use unless `sticky`. */
   failWith?: FailureClass | null;
   sticky?: boolean;
@@ -58,6 +61,8 @@ export class FakeProvider implements SocialProvider {
   sticky: boolean;
   health: AccountHealth;
   connectedTo: Set<string>;
+  /** Override the voice samples returned by listAuthoredPosts. */
+  authoredPosts: AuthoredPost[] | null;
   private readonly log: (msg: string) => void;
 
   constructor(options: FakeProviderOptions = {}) {
@@ -65,6 +70,7 @@ export class FakeProvider implements SocialProvider {
     this.sticky = options.sticky ?? false;
     this.health = options.health ?? { status: 'active', reason: null };
     this.connectedTo = new Set(options.connectedTo ?? []);
+    this.authoredPosts = options.authoredPosts ?? null;
     this.log = options.log ?? ((msg) => console.log(`[fake-provider] ${msg}`));
   }
 
@@ -178,6 +184,28 @@ export class FakeProvider implements SocialProvider {
         authorPublicIdentifier: 'example-robin',
       },
     ];
+  }
+
+  /** Voice samples. `authoredPosts` lets a test supply its own. */
+  async listAuthoredPosts(input: {
+    providerAccountId: string;
+    providerPersonId: string;
+    limit: number;
+  }): Promise<AuthoredPost[]> {
+    this.record('listAuthoredPosts', input);
+    if (this.authoredPosts) return this.authoredPosts.slice(0, input.limit);
+    return [
+      {
+        text: 'A post I wrote about shipping software that mostly works.',
+        isRepost: false,
+        postedAt: new Date(),
+      },
+      {
+        text: "Someone else's post that I shared without comment.",
+        isRepost: true,
+        postedAt: new Date(),
+      },
+    ].slice(0, input.limit);
   }
 
   async getPostComments(input: {

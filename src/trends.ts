@@ -42,17 +42,64 @@ const COMMENT_DRAFTS_PER_SYNC = 3;
  * Without this the model writes generic LinkedIn prose; with it, drafts at
  * least start from how this person really writes.
  */
-async function authorContext(accountId: string, db: Db): Promise<AuthorContext> {
+/** How many of the owner's own posts to use as voice samples. */
+const VOICE_SAMPLES = 5;
+
+/**
+ * Who we are writing as.
+ *
+ * The samples come from the owner's real LinkedIn posts, not from the posts
+ * published through this tool. The latter was the original source and it is
+ * close to useless: a fresh install has none, so the drafter was told "no
+ * samples available" and wrote in nobody's voice. That is what generic
+ * drafts look like from the inside.
+ *
+ * A provider failure is not fatal. Falling back to locally published posts is
+ * worse than the real thing and better than nothing, and drafting still has
+ * the headline either way.
+ */
+async function authorContext(
+  accountId: string,
+  db: Db,
+  provider: SocialProvider = getProvider(),
+): Promise<AuthorContext> {
   const account = await getAccount(accountId, db);
   if (!account) throw new Error(`Unknown account ${accountId}`);
-  const posts = await listPosts(accountId, db);
-  return {
-    name: account.displayName,
-    headline: null,
-    recentPosts: posts
+
+  let samples: string[] = [];
+  if (account.ownerPersonId) {
+    try {
+      const authored = await provider.listAuthoredPosts({
+        providerAccountId: account.providerAccountId,
+        providerPersonId: account.ownerPersonId,
+        limit: VOICE_SAMPLES * 2,
+      });
+      samples = authored
+        // A repost is someone else's writing. As a voice sample it teaches
+        // the drafter to imitate the wrong person.
+        .filter((p) => !p.isRepost && p.text.trim() !== '')
+        .slice(0, VOICE_SAMPLES)
+        .map((p) => p.text);
+    } catch (err) {
+      console.warn(`[trends] could not read own posts for ${accountId}`, err);
+    }
+  }
+
+  if (samples.length === 0) {
+    const posts = await listPosts(accountId, db);
+    samples = posts
       .filter((p) => p.status === 'published')
-      .slice(0, 5)
-      .map((p) => p.text),
+      .slice(0, VOICE_SAMPLES)
+      .map((p) => p.text);
+  }
+
+  return {
+    // The stored headline is the only line of context that says what field
+    // this person is in. It was hardcoded null here while being fetched and
+    // persisted correctly, so the drafter never knew.
+    name: account.displayName,
+    headline: account.headline,
+    recentPosts: samples,
   };
 }
 
@@ -167,7 +214,7 @@ export async function draftComments(
 ): Promise<{ drafted: number; declined: number }> {
   const account = await getAccount(input.accountId, db);
   if (!account) throw new Error(`Unknown account ${input.accountId}`);
-  const author = await authorContext(input.accountId, db);
+  const author = await authorContext(input.accountId, db, provider);
   const candidates = await undraftedPosts(input.accountId, COMMENT_DRAFTS_PER_SYNC, db);
 
   let drafted = 0;

@@ -85,6 +85,19 @@ export interface FoundPost {
 }
 
 /** An existing comment on someone else's post. */
+/**
+ * A post this person wrote, used as a voice sample when drafting.
+ *
+ * Reposts carry `isRepost` rather than being filtered here: whether someone
+ * else's words are a usable sample of your voice is a drafting decision, and
+ * this seam does not make drafting decisions.
+ */
+export interface AuthoredPost {
+  text: string;
+  isRepost: boolean;
+  postedAt: Date | null;
+}
+
 export interface ExistingComment {
   authorName: string;
   authorHeadline: string | null;
@@ -144,6 +157,19 @@ export interface SocialProvider {
     /** Set to read replies to one comment instead of top-level comments. */
     commentId?: string;
   }): Promise<ExistingComment[]>;
+
+  /**
+   * Posts written by one person, newest first. Read-only.
+   *
+   * Used to show the drafter how the account owner actually writes. Posts
+   * published through this tool are not a sufficient sample - a new install
+   * has none, and the drafter then has no voice to imitate at all.
+   */
+  listAuthoredPosts(input: {
+    providerAccountId: string;
+    providerPersonId: string;
+    limit: number;
+  }): Promise<AuthoredPost[]>;
 
   /** Reply to someone else's post. */
   postComment(input: PostCommentInput): Promise<PostCommentResult>;

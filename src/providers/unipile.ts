@@ -17,6 +17,7 @@ import { ProviderError } from '../provider.js';
 import type {
   AccountHealth,
   AccountOwner,
+  AuthoredPost,
   ConnectableAccount,
   PendingInvitation,
   ExistingComment,
@@ -118,6 +119,12 @@ interface UnipileSearchItem {
  * not an object — unlike every other endpoint, where the author is nested.
  * Reading it as an object yields undefined and every comment looks anonymous.
  */
+interface UnipileAuthoredPost {
+  text?: string;
+  is_repost?: boolean;
+  parsed_datetime?: string;
+}
+
 interface UnipileExistingComment {
   id?: string;
   text?: string;
@@ -549,6 +556,33 @@ export class UnipileProvider implements SocialProvider {
       });
     }
     return out;
+  }
+
+  async listAuthoredPosts(input: {
+    providerAccountId: string;
+    providerPersonId: string;
+    limit: number;
+  }): Promise<AuthoredPost[]> {
+    const res = await this.request<UnipileList<UnipileAuthoredPost>>(
+      `/api/v1/users/${encodeURIComponent(input.providerPersonId)}/posts`,
+      {
+        method: 'GET',
+        query: {
+          account_id: input.providerAccountId,
+          limit: String(input.limit),
+        },
+      },
+    );
+
+    return (res.items ?? [])
+      .filter((p) => (p.text ?? '').trim() !== '')
+      .map((p) => ({
+        text: (p.text ?? '').trim(),
+        isRepost: p.is_repost === true,
+        // parsed_datetime is ISO; `date` is a relative string like "3d" and
+        // is not parseable, so it is deliberately ignored.
+        postedAt: p.parsed_datetime ? new Date(p.parsed_datetime) : null,
+      }));
   }
 
   async getPostComments(input: {

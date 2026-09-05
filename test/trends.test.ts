@@ -24,6 +24,7 @@ import { approveDraft, draftComments, syncTrends } from '../src/trends.js';
 import { sweepAutoApprovals, tick } from '../src/queue/worker.js';
 import { fixture } from './helpers.js';
 import type { Fixture } from './helpers.js';
+import type { AuthorContext } from '../src/llm.js';
 
 let current: Fixture | null = null;
 
@@ -314,5 +315,73 @@ describe('draft lifecycle on failure and cancellation', () => {
     const after = await getDraft(draft.id, f.db);
     expect(after?.status).toBe('pending');
     expect(after?.autoApproveAt).toBeNull();
+  });
+});
+
+/* ================================================================== *
+ * Voice samples
+ *
+ * The drafter used to take its samples from posts published through this
+ * tool. A fresh install has none, so the prompt said "no samples available"
+ * and the model wrote in nobody's voice - which is what a generic draft is.
+ * ================================================================== */
+
+describe('voice samples', () => {
+  /** An LLM that records the author context it was handed and declines. */
+  function recording(): { llm: FakeLlm; seen: () => AuthorContext | null } {
+    let captured: AuthorContext | null = null;
+    const llm = new FakeLlm({ ...silent, declineComments: true });
+    const original = llm.draftComment.bind(llm);
+    llm.draftComment = async (input) => {
+      captured = input.author;
+      return original(input);
+    };
+    return { llm, seen: () => captured };
+  }
+
+  async function withOwner(): Promise<Fixture> {
+    const f = await seeded();
+    await updateAccount(
+      f.account.id,
+      { ownerPersonId: 'owner-person-1', headline: 'Staff Engineer' },
+      f.db,
+    );
+    return f;
+  }
+
+  it("uses the owner's real posts, and not their reposts", async () => {
+    const f = await withOwner();
+    const provider = new FakeProvider({
+      ...silent,
+      authoredPosts: [
+        { text: 'My own words about latency.', isRepost: false, postedAt: new Date() },
+        { text: 'Someone else entirely.', isRepost: true, postedAt: new Date() },
+      ],
+    });
+    await syncTrends({ accountId: f.account.id }, provider, f.db);
+
+    const { llm, seen } = recording();
+    await draftComments({ accountId: f.account.id, options: MANUAL }, llm, f.db, provider);
+
+    // A repost is someone else's writing; imitating it teaches the wrong voice.
+    expect(seen()?.recentPosts).toEqual(['My own words about latency.']);
+    expect(seen()?.headline).toBe('Staff Engineer');
+  });
+
+  it('falls back to locally published posts when the provider fails', async () => {
+    const f = await withOwner();
+    const provider = new FakeProvider(silent);
+    await syncTrends({ accountId: f.account.id }, provider, f.db);
+
+    // Fail only listAuthoredPosts: samples are a nice-to-have, and losing them
+    // must not take the whole drafting run down with them.
+    provider.listAuthoredPosts = async () => {
+      throw new Error('provider is having a day');
+    };
+
+    const { llm, seen } = recording();
+    await draftComments({ accountId: f.account.id, options: MANUAL }, llm, f.db, provider);
+
+    expect(seen()?.recentPosts).toEqual(['Most LinkedIn posts die at the fold.']);
   });
 });

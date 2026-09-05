@@ -39,66 +39,6 @@ accountsRouter.get(
   }),
 );
 
-accountsRouter.get(
-  '/api/accounts/:id',
-  asyncHandler(async (req, res) => {
-    const id = param(req, 'id') === 'default' ? await resolveAccountId(req) : param(req, 'id');
-    if (!id || !(await ownsAccount(req, id))) return notFound(res, 'No such account');
-    const state = await getAccountState(id);
-    if (!state) return notFound(res, 'No such account');
-    res.json(state);
-  }),
-);
-
-accountsRouter.post(
-  '/api/accounts/:id/pause',
-  asyncHandler(async (req, res) => {
-    const id = param(req, 'id');
-    if (!(await ownsAccount(req, id))) return notFound(res, 'No such account');
-
-    const reason =
-      typeof req.body?.reason === 'string' && req.body.reason.trim() !== ''
-        ? req.body.reason.trim()
-        : 'Paused by you.';
-
-    await updateAccount(id, { status: 'paused', sendingEnabled: false, pausedReason: reason });
-    res.json(await getAccountState(id));
-  }),
-);
-
-accountsRouter.post(
-  '/api/accounts/:id/resume',
-  asyncHandler(async (req, res) => {
-    const id = param(req, 'id');
-    if (!(await ownsAccount(req, id))) return notFound(res, 'No such account');
-
-    const state = await getAccountState(id);
-    if (!state) return notFound(res, 'No such account');
-
-    // Resuming out of a checkpoint or a restriction is not ours to do. The
-    // platform stopped this account; a button in our UI is not evidence that
-    // whatever caused it has been dealt with.
-    if (state.status === 'checkpointed' || state.status === 'restricted') {
-      return refused(
-        res,
-        state.pausedReason ??
-          'This account was stopped by LinkedIn. Resolve it on LinkedIn first, then reconnect here.',
-      );
-    }
-    if (state.status === 'disconnected') {
-      return refused(res, 'This account is disconnected. Reconnect it to resume sending.');
-    }
-
-    await updateAccount(id, {
-      status: 'active',
-      sendingEnabled: true,
-      pausedReason: null,
-      checkpointUntil: null,
-    });
-    res.json(await getAccountState(id));
-  }),
-);
-
 /**
  * Accounts linked at the provider that this instance could adopt.
  *
@@ -179,6 +119,69 @@ accountsRouter.post(
     });
 
     res.status(201).json(await getAccountState(account.id));
+  }),
+);
+
+// NOTE: literal paths must be declared BEFORE '/api/accounts/:id', or
+// Express matches them as an id — '/api/accounts/connectable' returned
+// 404 'No such account' until this was ordered correctly.
+accountsRouter.get(
+  '/api/accounts/:id',
+  asyncHandler(async (req, res) => {
+    const id = param(req, 'id') === 'default' ? await resolveAccountId(req) : param(req, 'id');
+    if (!id || !(await ownsAccount(req, id))) return notFound(res, 'No such account');
+    const state = await getAccountState(id);
+    if (!state) return notFound(res, 'No such account');
+    res.json(state);
+  }),
+);
+
+accountsRouter.post(
+  '/api/accounts/:id/pause',
+  asyncHandler(async (req, res) => {
+    const id = param(req, 'id');
+    if (!(await ownsAccount(req, id))) return notFound(res, 'No such account');
+
+    const reason =
+      typeof req.body?.reason === 'string' && req.body.reason.trim() !== ''
+        ? req.body.reason.trim()
+        : 'Paused by you.';
+
+    await updateAccount(id, { status: 'paused', sendingEnabled: false, pausedReason: reason });
+    res.json(await getAccountState(id));
+  }),
+);
+
+accountsRouter.post(
+  '/api/accounts/:id/resume',
+  asyncHandler(async (req, res) => {
+    const id = param(req, 'id');
+    if (!(await ownsAccount(req, id))) return notFound(res, 'No such account');
+
+    const state = await getAccountState(id);
+    if (!state) return notFound(res, 'No such account');
+
+    // Resuming out of a checkpoint or a restriction is not ours to do. The
+    // platform stopped this account; a button in our UI is not evidence that
+    // whatever caused it has been dealt with.
+    if (state.status === 'checkpointed' || state.status === 'restricted') {
+      return refused(
+        res,
+        state.pausedReason ??
+          'This account was stopped by LinkedIn. Resolve it on LinkedIn first, then reconnect here.',
+      );
+    }
+    if (state.status === 'disconnected') {
+      return refused(res, 'This account is disconnected. Reconnect it to resume sending.');
+    }
+
+    await updateAccount(id, {
+      status: 'active',
+      sendingEnabled: true,
+      pausedReason: null,
+      checkpointUntil: null,
+    });
+    res.json(await getAccountState(id));
   }),
 );
 

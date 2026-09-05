@@ -18,7 +18,11 @@ afterEach(() => {
   current = null;
 });
 
-async function setup(options?: { connectedDaysAgo?: number; timezone?: string }) {
+async function setup(options?: {
+  connectedDaysAgo?: number;
+  timezone?: string;
+  premium?: boolean;
+}) {
   current = await fixture(options);
   return current;
 }

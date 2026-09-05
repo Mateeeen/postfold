@@ -45,10 +45,17 @@ export const config: Config = {
     .split(',')
     .map((o) => o.trim())
     .filter((o) => o !== ''),
-  // Railway sets this; locally it is unset and the gate stays optional.
+  // Fail CLOSED. The first version keyed off RAILWAY_PUBLIC_DOMAIN, which is
+  // not always present — so a real deployment came up publicly reachable with
+  // no token and no complaint. Any production build now demands a token
+  // unless someone explicitly opts out, because the failure mode here is an
+  // open API that can post and send connection requests as the account owner.
   isPublic:
-    optional('PUBLIC_DEPLOYMENT') === 'true' ||
-    optional('RAILWAY_PUBLIC_DOMAIN') !== null,
+    optional('ALLOW_UNAUTHENTICATED') !== 'true' &&
+    (process.env['NODE_ENV'] === 'production' ||
+      optional('PUBLIC_DEPLOYMENT') === 'true' ||
+      optional('RAILWAY_PUBLIC_DOMAIN') !== null ||
+      optional('RAILWAY_ENVIRONMENT') !== null),
 };
 
 /** True when we are running without third-party credentials. */

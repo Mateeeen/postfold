@@ -6,3 +6,7 @@ data/
 *.db-wal
 *.db-shm
 web/dist/
+
+# Scratch files from tooling; never part of the project.
+*.tmp.json
+*.tmp.ts

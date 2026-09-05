@@ -2,7 +2,8 @@ import path from 'node:path';
 import express from 'express';
 import type { NextFunction, Request, Response } from 'express';
 import { config, usingFakeProvider } from './config.js';
-import { openDatabase, setDb } from './db/index.js';
+import { getDb, hasDb, openDatabase, setDb } from './db/index.js';
+import { cors, requireAccess } from './http/access.js';
 import { requireUser } from './http/auth.js';
 import { accountsRouter } from './http/routes/accounts.js';
 import { draftsRouter } from './http/routes/drafts.js';
@@ -21,12 +22,18 @@ export function createApp(): express.Express {
   // will be computed over a re-serialised body that no longer matches.
   app.use(webhooksRouter);
 
+  app.use(cors);
   app.use(express.json({ limit: '1mb' }));
-  app.use(requireUser);
 
+  // Unauthenticated: the platform healthcheck has to reach it, and it exposes
+  // nothing beyond liveness.
   app.get('/api/health', (_req, res) => {
     res.json({ ok: true, provider: getProvider().name, fake: usingFakeProvider });
   });
+
+  // Everything past this point can act on a real LinkedIn account.
+  app.use(requireAccess);
+  app.use(requireUser);
 
   app.use(accountsRouter);
   app.use(postsRouter);
@@ -47,7 +54,21 @@ export function createApp(): express.Express {
 }
 
 function main(): void {
-  const db = openDatabase(config.databasePath);
+  // Refuse to expose an ungated API. Every route below the gate performs
+  // irreversible actions on someone's real account; shipping that open to the
+  // internet is not a configuration mistake worth tolerating.
+  if (config.isPublic && !config.appToken) {
+    console.error(
+      'Refusing to start: this deployment is publicly reachable but APP_TOKEN is unset. ' +
+        'Set APP_TOKEN to a long random string, or run without a public domain.',
+    );
+    process.exit(1);
+  }
+
+  // start.ts (production) has already opened the database and run migrations.
+  // Opening a second handle to the same file would break the single-writer
+  // assumption the whole queue rests on.
+  const db = hasDb() ? getDb() : openDatabase(config.databasePath);
   setDb(db);
 
   const app = createApp();

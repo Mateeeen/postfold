@@ -36,6 +36,11 @@ export function openDatabase(filePath: string): Db {
   return handle;
 }
 
+/** Has a connection already been opened? */
+export function hasDb(): boolean {
+  return db !== null;
+}
+
 export function getDb(): Db {
   if (!db) db = openDatabase(config.databasePath);
   return db;

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { api, ApiError } from './api';
+import { api, ApiError, setToken } from './api';
 import type {
   AccountState,
   DraftCard,
@@ -143,6 +143,7 @@ export function App(): JSX.Element {
   const [searchPending, setSearchPending] = useState(false);
   const [loading, setLoading] = useState(true);
   const [fatal, setFatal] = useState<string | null>(null);
+  const [tokenInput, setTokenInput] = useState('');
 
   const refresh = useCallback(async (): Promise<void> => {
     try {
@@ -166,9 +167,11 @@ export function App(): JSX.Element {
       setFatal(null);
     } catch (e) {
       setFatal(
-        e instanceof ApiError && e.status === 404
-          ? 'No account connected yet. Run `npm run seed` to create the test account.'
-          : 'Could not reach the PostFold API. Is the server running?',
+        e instanceof ApiError && e.status === 401
+          ? 'unauthorised'
+          : e instanceof ApiError && e.status === 404
+            ? 'No account connected yet. Run `npm run seed` to create the test account.'
+            : 'Could not reach the PostFold API. Is the server running?',
       );
     } finally {
       setLoading(false);
@@ -178,9 +181,13 @@ export function App(): JSX.Element {
   useEffect(() => {
     void (async () => {
       try {
-        setConfig(await (await fetch('/api/config')).json());
-      } catch {
-        setFatal('Could not reach the PostFold API. Is the server running?');
+        setConfig(await api.config());
+      } catch (e) {
+        setFatal(
+          e instanceof ApiError && e.status === 401
+            ? 'unauthorised'
+            : 'Could not reach the PostFold API. Is the server running?',
+        );
       }
       await refresh();
     })();
@@ -215,6 +222,48 @@ export function App(): JSX.Element {
     }
     await refresh();
   };
+
+  // A deployed API is token-gated. Ask for it rather than showing an app
+  // whose every request will fail.
+  if (fatal === 'unauthorised') {
+    return (
+      <div className="app">
+        <div className="masthead">
+          <h1>PostFold</h1>
+        </div>
+        <div className="panel" style={{ maxWidth: 420 }}>
+          <h2>Access token</h2>
+          <p className="meta" style={{ marginBottom: 10 }}>
+            This instance is protected. Paste the APP_TOKEN it was deployed with.
+          </p>
+          <input
+            type="password"
+            value={tokenInput}
+            placeholder="APP_TOKEN"
+            onChange={(e) => setTokenInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && tokenInput.trim() !== '') {
+                setToken(tokenInput.trim());
+                window.location.reload();
+              }
+            }}
+          />
+          <div className="row" style={{ marginTop: 10 }}>
+            <button
+              className="primary"
+              disabled={tokenInput.trim() === ''}
+              onClick={() => {
+                setToken(tokenInput.trim());
+                window.location.reload();
+              }}
+            >
+              Unlock
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="app">

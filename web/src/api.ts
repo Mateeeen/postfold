@@ -24,10 +24,41 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * Where the API lives. Empty when the API serves this bundle itself (local
+ * `npm run dev`); an absolute URL when the frontend is hosted separately —
+ * Vercel serving the UI, Railway running the API and the worker.
+ */
+export const API_BASE = (import.meta.env.VITE_API_BASE_URL ?? '').replace(/\/+$/, '');
+
+const TOKEN_KEY = 'postfold.token';
+
+export function getToken(): string {
+  try {
+    return localStorage.getItem(TOKEN_KEY) ?? '';
+  } catch {
+    return '';
+  }
+}
+
+export function setToken(token: string): void {
+  try {
+    if (token) localStorage.setItem(TOKEN_KEY, token);
+    else localStorage.removeItem(TOKEN_KEY);
+  } catch {
+    /* private browsing; the token simply will not persist */
+  }
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(path, {
+  const token = getToken();
+  const res = await fetch(`${API_BASE}${path}`, {
     ...init,
-    headers: { 'content-type': 'application/json', ...(init?.headers ?? {}) },
+    headers: {
+      'content-type': 'application/json',
+      ...(token ? { authorization: `Bearer ${token}` } : {}),
+      ...(init?.headers ?? {}),
+    },
   });
 
   const text = await res.text();
@@ -163,6 +194,14 @@ export interface PostRow {
 /* --- Calls ------------------------------------------------------------ */
 
 export const api = {
+  config: () =>
+    request<{
+      foldCharLimit: number;
+      foldLineLimit: number;
+      noteLimit: number;
+      hardDailyInviteCap: number;
+    }>('/api/config'),
+
   account: () => request<AccountState>('/api/accounts/default'),
 
   pause: (id: string, reason: string) =>

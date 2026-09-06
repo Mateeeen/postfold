@@ -323,3 +323,126 @@ button.link { border: none; background: none; color: var(--muted); padding: 4px 
   .print-slide.cover .body { font-size: 30pt; font-weight: 700; }
   .print-slide .n { font-size: 10pt; color: #8b847b; margin-top: 16px; }
 }
+
+/* --- Today ------------------------------------------------------------ *
+ * The home view. Uses the same tokens as everything else so it inherits
+ * light/dark without a second palette to keep in sync.
+ * --------------------------------------------------------------------- */
+
+.today {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 16px 18px;
+}
+
+/* A running engine and a stopped one must not look alike at a glance. */
+.panel.live {
+  border-left: 3px solid var(--ok);
+}
+.panel.held {
+  border-left: 3px solid var(--magenta);
+  background: var(--magenta-soft);
+}
+
+.panel-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.panel-head h2 {
+  font-size: 15px;
+  margin: 0;
+  letter-spacing: -0.01em;
+}
+
+.lede {
+  margin: 0 0 8px;
+  color: var(--ink-2);
+  line-height: 1.55;
+  font-size: 14px;
+}
+
+.lede.muted {
+  color: var(--muted);
+  font-size: 13px;
+  margin-bottom: 0;
+}
+
+.needs {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.need {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  text-align: left;
+  padding: 12px 14px;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+}
+
+.need:hover {
+  border-color: var(--line-2);
+}
+
+.need-n {
+  font-size: 22px;
+  font-variant-numeric: tabular-nums;
+  min-width: 32px;
+  color: var(--magenta);
+}
+
+.need-what {
+  font-size: 14px;
+}
+
+.need-what em {
+  display: block;
+  font-style: normal;
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 2px;
+}
+
+.meter {
+  margin-bottom: 12px;
+}
+
+.meter-head {
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+  margin-bottom: 5px;
+}
+
+.meter-track {
+  height: 6px;
+  background: var(--panel-2);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.meter-fill {
+  height: 100%;
+  background: var(--magenta);
+  border-radius: 999px;
+  transition: width 200ms ease;
+}

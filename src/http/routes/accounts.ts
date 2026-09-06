@@ -26,6 +26,13 @@ accountsRouter.get('/api/config', (_req, res) => {
     foldLineLimit: LIMITS.FOLD_LINE_LIMIT,
     noteLimit: LIMITS.MAX_NOTE_CHARS,
     hardDailyInviteCap: LIMITS.HARD_DAILY_INVITE_CAP,
+    // The cadence, so the UI can state it without knowing a number.
+    // Invariant 1 applies to the frontend too.
+    dailyPostCap: LIMITS.DAILY_POST_CAP,
+    dailyCommentCap: LIMITS.HARD_DAILY_COMMENT_CAP,
+    weeklyInviteCap: LIMITS.WEEKLY_INVITE_CAP,
+    autoApproveHours: LIMITS.AUTO_APPROVE_AFTER_MS / (60 * 60 * 1000),
+    manualDelayMinutes: LIMITS.MANUAL_APPROVAL_DELAY_MS / (60 * 1000),
   });
 });
 

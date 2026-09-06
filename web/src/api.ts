@@ -191,16 +191,29 @@ export interface PostRow {
   publishedAt: string | null;
 }
 
+/**
+ * Limits, served rather than hardcoded.
+ *
+ * Every number the UI shows about pacing or caps comes from here. A cap
+ * duplicated in the frontend is a cap that will drift from the one actually
+ * being enforced, and the user would be reading the wrong one.
+ */
+export interface Config {
+  foldCharLimit: number;
+  foldLineLimit: number;
+  noteLimit: number;
+  hardDailyInviteCap: number;
+  dailyPostCap: number;
+  dailyCommentCap: number;
+  weeklyInviteCap: number;
+  autoApproveHours: number;
+  manualDelayMinutes: number;
+}
+
 /* --- Calls ------------------------------------------------------------ */
 
 export const api = {
-  config: () =>
-    request<{
-      foldCharLimit: number;
-      foldLineLimit: number;
-      noteLimit: number;
-      hardDailyInviteCap: number;
-    }>('/api/config'),
+  config: () => request<Config>('/api/config'),
 
   account: () => request<AccountState>('/api/accounts/default'),
 

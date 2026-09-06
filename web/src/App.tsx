@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { api, ApiError, setToken } from './api';
 import type {
   AccountState,
+  Config,
   DraftCard,
   Keyword,
   LastSearch,
@@ -13,15 +14,11 @@ import { Composer, Carousel } from './PostFold';
 import { Connections, blockingReason } from './Connections';
 import { Queue } from './Queue';
 import { Drafts } from './Drafts';
+import { Today } from './Today';
 
-export interface AppConfig {
-  foldCharLimit: number;
-  foldLineLimit: number;
-  noteLimit: number;
-  hardDailyInviteCap: number;
-}
+export type AppConfig = Config;
 
-type Tab = 'compose' | 'carousel' | 'drafts' | 'connections' | 'queue';
+type Tab = 'today' | 'compose' | 'carousel' | 'drafts' | 'connections' | 'queue';
 
 const BAND_LABEL: Record<AccountState['acceptance']['band'], string> = {
   unrated: 'not enough data yet',
@@ -129,7 +126,7 @@ function AccountStrip({
 }
 
 export function App(): JSX.Element {
-  const [tab, setTab] = useState<Tab>('compose');
+  const [tab, setTab] = useState<Tab>('today');
   const [config, setConfig] = useState<AppConfig | null>(null);
   const [account, setAccount] = useState<AccountState | null>(null);
   const [suggestions, setSuggestions] = useState<SuggestionCard[]>([]);
@@ -278,11 +275,12 @@ export function App(): JSX.Element {
       <div className="tabs" role="tablist">
         {(
           [
-            ['compose', 'Compose'],
+            ['today', 'Today'],
+            ['drafts', 'Review'],
+            ['connections', 'People'],
+            ['compose', 'Write a post'],
             ['carousel', 'Carousel'],
-            ['drafts', 'Drafts'],
-            ['connections', `Connections`],
-            ['queue', 'Queue'],
+            ['queue', 'Scheduled'],
           ] as [Tab, string][]
         ).map(([id, label]) => (
           <button
@@ -303,6 +301,17 @@ export function App(): JSX.Element {
           </button>
         ))}
       </div>
+
+      {tab === 'today' && account && config && (
+        <Today
+          account={account}
+          config={config}
+          drafts={drafts}
+          suggestions={suggestions}
+          pending={pending}
+          onGo={setTab}
+        />
+      )}
 
       {tab === 'compose' && config && (
         <>

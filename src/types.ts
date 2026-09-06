@@ -174,6 +174,8 @@ export type ActionStatus =
 export interface CreatePostPayload {
   postId: string;
   text: string;
+  /** Data URI, carried on the action so the image survives the queue wait. */
+  imageUrl?: string | null;
 }
 
 export interface SendInvitePayload {
@@ -285,6 +287,10 @@ export interface Draft {
   /** Which model wrote it, so a bad batch is traceable to a model. */
   model: string | null;
   autoApproveAt: Date | null;
+  /** Data URI. Null when none was drawn, which is a normal outcome. */
+  imageUrl: string | null;
+  /** What the image was asked for, so a bad one is explainable. */
+  imagePrompt: string | null;
   createdAt: Date;
   decidedAt: Date | null;
   decidedBy: 'user' | 'timer' | null;

@@ -107,6 +107,7 @@ async function execute(
       const res = await provider.publishPost({
         providerAccountId: account.providerAccountId,
         text: payload.text,
+        imageUrl: payload.imageUrl ?? null,
       });
       await markPostPublished(payload.postId, res.urn, res.publishedAt, db);
       return;

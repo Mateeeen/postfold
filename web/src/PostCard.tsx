@@ -33,6 +33,8 @@ interface Props {
   foldCharLimit: number;
   /** Marks a post that has not been published, so a preview never looks live. */
   draft?: boolean;
+  /** Data URI. Rendered edge to edge, the way the feed shows an attachment. */
+  imageUrl?: string | null;
   footer?: React.ReactNode;
 }
 
@@ -102,6 +104,7 @@ export function PostCard({
   postUrl,
   foldCharLimit,
   draft = false,
+  imageUrl,
   footer,
 }: Props): JSX.Element {
   const [expanded, setExpanded] = useState(false);
@@ -146,6 +149,12 @@ export function PostCard({
       {folds && !expanded && (
         <div className="li-fold-note">
           Everything after this point is hidden until someone taps “see more”.
+        </div>
+      )}
+
+      {imageUrl && (
+        <div className="li-image">
+          <img src={imageUrl} alt="" />
         </div>
       )}
 

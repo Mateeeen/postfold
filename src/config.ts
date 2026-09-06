@@ -23,6 +23,9 @@ export interface Config {
   llmBaseUrl: string;
   llmApiKey: string | null;
   llmModel: string;
+  imageBaseUrl: string;
+  imageApiKey: string | null;
+  imageModel: string;
 }
 
 function optional(name: string): string | null {
@@ -40,6 +43,9 @@ export const config: Config = {
   llmBaseUrl: process.env['LLM_BASE_URL'] ?? 'https://api.groq.com/openai/v1',
   llmApiKey: optional('LLM_API_KEY'),
   llmModel: process.env['LLM_MODEL'] ?? 'openai/gpt-oss-120b',
+  imageBaseUrl: process.env['IMAGE_BASE_URL'] ?? 'https://api.together.xyz',
+  imageApiKey: optional('TOGETHER_API_KEY'),
+  imageModel: process.env['IMAGE_MODEL'] ?? 'black-forest-labs/FLUX.1-schnell-Free',
   appToken: optional('APP_TOKEN'),
   allowedOrigins: (process.env['ALLOWED_ORIGINS'] ?? '')
     .split(',')
@@ -63,3 +69,6 @@ export const usingFakeProvider = config.unipileApiKey === null;
 
 /** True when no drafting model is configured; drafts become placeholders. */
 export const usingFakeLlm = config.llmApiKey === null;
+
+/** No key means no pictures. Posts are still drafted, just without one. */
+export const usingFakeImages = config.imageApiKey === null;

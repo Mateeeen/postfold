@@ -132,6 +132,7 @@ function DraftItem({
           who={me}
           text={text}
           foldCharLimit={foldCharLimit}
+          imageUrl={draft.imageUrl}
           draft
           footer={
             <textarea

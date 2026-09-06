@@ -20,6 +20,8 @@ import type {
 export interface PublishPostInput {
   providerAccountId: string;
   text: string;
+  /** Optional image as a data URI. Providers that cannot attach ignore it. */
+  imageUrl?: string | null;
 }
 
 export interface PublishPostResult {

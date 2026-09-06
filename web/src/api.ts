@@ -173,6 +173,8 @@ export interface DraftCard {
   createdAt: string;
   /** When this publishes itself. Null means it waits for a human. */
   autoApproveAt: string | null;
+  /** Data URI for the generated image, when there is one. */
+  imageUrl: string | null;
   sourcePost: DraftSourcePost | null;
 }
 

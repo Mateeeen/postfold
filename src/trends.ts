@@ -29,6 +29,8 @@ import type { Db } from './db/index.js';
 import { getDb } from './db/index.js';
 import type { AuthorContext, LlmProvider, SourcePost } from './llm.js';
 import { getLlm } from './llm/index.js';
+import type { ImageProvider } from './images.js';
+import { getImages } from './images/index.js';
 import { autoApproveAt, LIMITS } from './policy.js';
 import type { SocialProvider } from './provider.js';
 import { getProvider } from './providers/index.js';
@@ -272,6 +274,7 @@ export async function draftPost(
   input: { accountId: string; options: DraftOptions },
   llm: LlmProvider = getLlm(),
   db: Db = getDb(),
+  images: ImageProvider = getImages(),
 ): Promise<Draft | null> {
   const author = await authorContext(input.accountId, db);
   const trending = await recentDiscoveredPosts(
@@ -288,6 +291,17 @@ export async function draftPost(
     foldCharLimit: LIMITS.FOLD_CHAR_LIMIT,
   });
 
+  // An image is a bonus, never a precondition. If drawing fails the words are
+  // still worth publishing, so the failure is logged and the draft goes on
+  // without one.
+  let image: { url: string; prompt: string } | null = null;
+  try {
+    const drawn = await images.draw({ prompt: imagePromptFor(result.text) });
+    if (drawn) image = { url: drawn.url, prompt: drawn.prompt };
+  } catch (err) {
+    console.warn('[trends] image generation failed; posting without one', err);
+  }
+
   return createDraft(
     {
       accountId: input.accountId,
@@ -296,9 +310,36 @@ export async function draftPost(
       rationale: result.rationale,
       model: llm.model,
       autoApproveAt: input.options.autoApprove ? autoApproveAt(new Date()) : null,
+      imageUrl: image?.url ?? null,
+      imagePrompt: image?.prompt ?? null,
     },
     db,
   );
+}
+
+/**
+ * What to draw for a post.
+ *
+ * Deliberately not "illustrate this post". Feeds are full of generated images
+ * that try to depict an abstract claim literally and land somewhere between
+ * stock photography and a fever dream. Asking for a restrained, abstract
+ * treatment of the subject produces something that reads as considered, and
+ * the negative instructions matter more than the positive ones: text rendered
+ * into an image is the single clearest sign it was generated.
+ */
+export function imagePromptFor(postText: string): string {
+  const subject = postText.replace(/\s+/g, ' ').trim().slice(0, 300);
+  return [
+    'Editorial illustration for a professional article about:',
+    subject,
+    '',
+    'Style: restrained abstract geometric composition, limited palette of two',
+    'or three colours, generous negative space, matte finish, subtle grain.',
+    'Feels like a considered magazine illustration.',
+    'No text, no words, no letters, no numbers, no logos, no watermarks.',
+    'No people, no faces, no hands. Not a photograph. Not clip art.',
+    'No stock-photo handshakes, lightbulbs, rocket ships, or brains.',
+  ].join('\n');
 }
 
 /**
@@ -320,10 +361,11 @@ export async function draftDailyPost(
   llm: LlmProvider = getLlm(),
   db: Db = getDb(),
   now: Date = new Date(),
+  images: ImageProvider = getImages(),
 ): Promise<Draft | null> {
   const since = new Date(now.getTime() - LIMITS.DAILY_POST_INTERVAL_MS);
   if ((await countDraftsSince(input.accountId, 'post', since, db)) > 0) return null;
-  return draftPost(input, llm, db);
+  return draftPost(input, llm, db, images);
 }
 
 /* --- Approval ----------------------------------------------------------- */
@@ -364,7 +406,12 @@ export async function approveDraft(
     result = await enqueue(
       {
         accountId: draft.accountId,
-        payload: { kind: 'create_post', postId: post.id, text },
+        payload: {
+          kind: 'create_post',
+          postId: post.id,
+          text,
+          imageUrl: draft.imageUrl,
+        },
         dedupeKey: `draft-post:${draft.id}`,
         urgency,
       },

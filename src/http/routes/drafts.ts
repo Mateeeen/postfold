@@ -72,6 +72,7 @@ draftsRouter.get(
         model: d.model,
         createdAt: d.createdAt.toISOString(),
         autoApproveAt: d.autoApproveAt ? d.autoApproveAt.toISOString() : null,
+        imageUrl: d.imageUrl,
         sourcePost: d.sourcePost
           ? {
               urn: d.sourcePost.urn,

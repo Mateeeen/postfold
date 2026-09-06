@@ -409,6 +409,22 @@ export class UnipileProvider implements SocialProvider {
     form.append('account_id', input.providerAccountId);
     form.append('text', input.text);
 
+    // The endpoint is multipart precisely because it also takes attachments.
+    // A malformed image must not cost us the post, so a decode failure is
+    // logged and the text goes out on its own.
+    if (input.imageUrl?.startsWith('data:')) {
+      try {
+        const [header, encoded] = input.imageUrl.split(',', 2);
+        const mime = /^data:([^;]+)/.exec(header ?? '')?.[1] ?? 'image/jpeg';
+        const bytes = Buffer.from(encoded ?? '', 'base64');
+        if (bytes.length > 0) {
+          form.append('attachments', new Blob([bytes], { type: mime }), 'image.jpg');
+        }
+      } catch (err) {
+        console.warn('[unipile] could not attach the image; posting text only', err);
+      }
+    }
+
     const res = await this.request<UnipilePostResponse>('/api/v1/posts', {
       method: 'POST',
       body: form,

@@ -674,3 +674,20 @@ button.ghost:hover:not(:disabled) { border-color: var(--ink-2); color: var(--ink
   .profile { flex-wrap: wrap; }
   .profile-state { width: 100%; }
 }
+
+/* A generated image, shown the way the feed shows an attachment. */
+.li-image {
+  border-top: 1px solid var(--line);
+  background: var(--panel-2);
+  line-height: 0;
+}
+
+.li-image img {
+  width: 100%;
+  height: auto;
+  display: block;
+  /* The feed crops to roughly this ratio; showing it uncropped here would
+     hide what the post will actually look like. */
+  aspect-ratio: 1200 / 628;
+  object-fit: cover;
+}

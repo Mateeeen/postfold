@@ -17,6 +17,7 @@ import { createPost, listPosts } from './db/content.js';
 import {
   countDraftsSince,
   createDraft,
+  recentDiscoveredPosts,
   getDraft,
   listEnabledTerms,
   setDraftStatus,
@@ -273,7 +274,12 @@ export async function draftPost(
   db: Db = getDb(),
 ): Promise<Draft | null> {
   const author = await authorContext(input.accountId, db);
-  const trending = await undraftedPosts(input.accountId, 5, db);
+  const trending = await recentDiscoveredPosts(
+    input.accountId,
+    LIMITS.POST_CONTEXT_SAMPLES,
+    new Date(Date.now() - LIMITS.POST_CONTEXT_WINDOW_MS),
+    db,
+  );
   if (trending.length === 0) return null;
 
   const result = await llm.draftPost({

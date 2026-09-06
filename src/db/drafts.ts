@@ -222,6 +222,33 @@ export async function undraftedPosts(
   return rows.map(mapDiscovered);
 }
 
+/**
+ * The most-engaged posts seen recently, whether or not we drafted a reply.
+ *
+ * Deliberately not undraftedPosts(). That query answers "what could we still
+ * comment on", and comment drafting runs first and claims the best ones - so
+ * a post drafter reading it is starved by design, and once every discovered
+ * post carries a draft it returns nothing forever. Inspiration and targets
+ * are different questions: a post someone else already replied to is still
+ * a perfectly good signal about what the field is talking about.
+ */
+export async function recentDiscoveredPosts(
+  accountId: string,
+  limit: number,
+  since: Date,
+  db: Db = getDb(),
+): Promise<DiscoveredPost[]> {
+  const rows = db
+    .prepare(
+      `SELECT ${DISCOVERED_COLUMNS} FROM discovered_posts d
+        WHERE d.account_id = ? AND d.discovered_at >= ?
+        ORDER BY (d.reactions + d.comments) DESC, d.discovered_at DESC
+        LIMIT ?`,
+    )
+    .all(accountId, since.toISOString(), limit) as DiscoveredRow[];
+  return rows.map(mapDiscovered);
+}
+
 /* --- Drafts ------------------------------------------------------------ */
 
 interface DraftRow {

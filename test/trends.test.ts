@@ -395,6 +395,22 @@ describe('voice samples', () => {
  * ================================================================== */
 
 describe('draftDailyPost', () => {
+  it('is not starved by comment drafting having claimed every post', async () => {
+    // draftPost used to read undraftedPosts(), the query for "what could we
+    // still reply to". Comment drafting runs first and takes the best ones, so
+    // the post drafter saw nothing and silently produced no post at all.
+    const f = await seeded();
+    const provider = new FakeProvider(silent);
+    const llm = new FakeLlm(silent);
+    await syncTrends({ accountId: f.account.id }, provider, f.db);
+    await draftComments({ accountId: f.account.id, options: MANUAL }, llm, f.db, provider);
+
+    expect(await undraftedPosts(f.account.id, 5, f.db)).toHaveLength(0);
+
+    const post = await draftDailyPost({ accountId: f.account.id, options: AUTO }, llm, f.db);
+    expect(post).not.toBeNull();
+  });
+
   it('writes one post', async () => {
     const f = await seeded();
     await syncTrends({ accountId: f.account.id }, new FakeProvider(silent), f.db);

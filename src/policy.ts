@@ -163,6 +163,13 @@ export const LIMITS = {
    */
   DAILY_POST_INTERVAL_MS: 24 * 60 * 60 * 1000,
   /**
+   * How far back the post drafter looks for what the field is talking about.
+   * Short, because "trending" stops being true quickly.
+   */
+  POST_CONTEXT_WINDOW_MS: 3 * 24 * 60 * 60 * 1000,
+  /** How many posts to show the drafter as context. */
+  POST_CONTEXT_SAMPLES: 8,
+  /**
    * How often the automation goes looking for posts to comment on.
    *
    * Twice a day against a 2/day comment cap, so a run that finds nothing

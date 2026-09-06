@@ -217,6 +217,32 @@ export async function markFailed(
  * clean equivalent for a millisecond interval, so the caller computes the
  * timestamp in JavaScript and binds it as an ISO string.
  */
+/**
+ * Move a pending action earlier. Never later.
+ *
+ * For when a person asks for something the automation has already queued for
+ * later - pressing "search now" should search now, not be told to come back
+ * tomorrow. The one-way guard matters: this must not become a way to push
+ * work back, because the queue's pacing is what keeps sends spread out.
+ *
+ * Not rescheduleAction(), which stamps a failure class and an error message
+ * onto the row. Nothing failed here.
+ */
+export async function pullForward(
+  id: string,
+  at: Date,
+  db: Db = getDb(),
+): Promise<boolean> {
+  const res = db
+    .prepare(
+      `UPDATE actions
+          SET scheduled_at = @at, updated_at = @now
+        WHERE id = @id AND status = 'pending' AND scheduled_at > @at`,
+    )
+    .run({ id, at: at.toISOString(), now: nowIso() });
+  return res.changes > 0;
+}
+
 export async function rescheduleAction(
   id: string,
   retryAt: Date,

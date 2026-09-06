@@ -9,7 +9,12 @@ import {
   setKeywordEnabled,
 } from '../../db/drafts.js';
 import { LIMITS } from '../../policy.js';
-import { lastCompletedAt, lastResult, listPendingActions } from '../../db/actions.js';
+import {
+  lastCompletedAt,
+  lastResult,
+  listPendingActions,
+  pullForward,
+} from '../../db/actions.js';
 import { enqueue } from '../../queue/scheduler.js';
 import { getAccountState } from '../../state.js';
 import { approveDraft, dismissDraft, suggestKeywords } from '../../trends.js';
@@ -219,10 +224,18 @@ draftsRouter.post(
       (a) => a.kind === 'sync_trends',
     );
     if (pending) {
-      return refused(
-        res,
-        `A search is already queued for ${pending.scheduledAt.toISOString()}.`,
-      );
+      // The automation queues its own search, often for tomorrow's window.
+      // Refusing on that basis makes the button dead through no fault of the
+      // user, so bring the queued one forward instead of turning them away.
+      // Searching is read-only, so there is no pacing reason to make them wait.
+      const moved = await pullForward(pending.id, new Date());
+      return res.status(202).json({
+        created: false,
+        action: {
+          id: pending.id,
+          scheduledAt: moved ? new Date().toISOString() : pending.scheduledAt.toISOString(),
+        },
+      });
     }
 
     // Rate-limit the button explicitly rather than leaning on a dedupe key —

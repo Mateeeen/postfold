@@ -286,6 +286,18 @@ function Keywords({
         >
           {busy ? 'Working…' : 'Find posts now'}
         </button>
+        <button
+          className="ghost"
+          disabled={busy}
+          onClick={() =>
+            void run(
+              () => api.postNow(),
+              'Written. It is below, waiting for you — it will not publish on its own.',
+            )
+          }
+        >
+          Write me a post
+        </button>
       </div>
 
       {lastSearch && !notice && (

@@ -290,6 +290,9 @@ export const api = {
   refreshProfile: (id: string) =>
     request<AccountState>(`/api/accounts/${id}/refresh-profile`, { method: 'POST' }),
 
+  postNow: () =>
+    request<{ draft: DraftCard }>('/api/drafts/post-now', { method: 'POST' }),
+
   dismissDraft: (id: string) =>
     request<{ ok: true }>(`/api/drafts/${id}/dismiss`, { method: 'POST' }),
 

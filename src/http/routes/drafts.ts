@@ -17,7 +17,7 @@ import {
 } from '../../db/actions.js';
 import { enqueue } from '../../queue/scheduler.js';
 import { getAccountState } from '../../state.js';
-import { approveDraft, dismissDraft, suggestKeywords } from '../../trends.js';
+import { draftPost, approveDraft, dismissDraft, suggestKeywords } from '../../trends.js';
 import { resolveAccountId } from '../auth.js';
 import { asyncHandler, badRequest, notFound, param, refused } from '../util.js';
 
@@ -213,6 +213,32 @@ draftsRouter.delete(
 );
 
 /* --- Trend sync --------------------------------------------------------- */
+
+/**
+ * Write a post now, on request.
+ *
+ * Deliberately bypasses the once-a-day guard. That guard exists to stop the
+ * automation nagging - drafting a replacement the moment you reject one - and
+ * it counts drafts rather than publishes for exactly that reason. Neither
+ * concern applies when a person presses a button and waits for the result.
+ * The queue's create_post budget still caps what can actually be published.
+ */
+draftsRouter.post(
+  '/api/drafts/post-now',
+  asyncHandler(async (req, res) => {
+    const accountId = await resolveAccountId(req);
+    if (!accountId) return notFound(res, 'No account connected');
+
+    const draft = await draftPost({ accountId, options: { autoApprove: false } });
+    if (!draft) {
+      return refused(
+        res,
+        'No recent posts to work from yet. Run a search first so there is something to react to.',
+      );
+    }
+    res.status(201).json({ draft });
+  }),
+);
 
 draftsRouter.post(
   '/api/trends/sync',

@@ -446,3 +446,231 @@ button.link { border: none; background: none; color: var(--muted); padding: 4px 
   border-radius: 999px;
   transition: width 200ms ease;
 }
+
+/* --- Identity --------------------------------------------------------- */
+
+.profile {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 18px 20px;
+  margin-bottom: 14px;
+}
+
+.avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  border-radius: 50%;
+  overflow: hidden;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  color: var(--muted);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  user-select: none;
+}
+
+.avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+.profile-text { min-width: 0; flex: 1; }
+
+.profile-name { font-size: 19px; margin: 0 0 2px; letter-spacing: -0.01em; }
+.profile-name a { color: inherit; text-decoration: none; }
+.profile-name a:hover { text-decoration: underline; }
+
+.profile-headline {
+  margin: 0 0 8px;
+  font-size: 13px;
+  color: var(--ink-2);
+  line-height: 1.45;
+  /* Headlines are long and keyword-stuffed; two lines is plenty. */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.profile-meta {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.chip {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 2px 9px;
+  font-size: 11.5px;
+  color: var(--ink-2);
+  background: var(--panel-2);
+}
+
+.chip.premium { border-color: var(--warn); color: var(--warn); background: transparent; }
+
+.profile-state {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13px;
+  color: var(--ink-2);
+  flex: none;
+}
+
+.dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+.dot.live { background: var(--ok); }
+.dot.held { background: var(--magenta); }
+
+button.link.tiny { font-size: 11.5px; padding: 0; }
+
+/* --- A post, as the platform draws it --------------------------------- */
+
+.li-post {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.li-post.is-draft { border-style: dashed; }
+
+.li-head { display: flex; gap: 12px; padding: 14px 16px 10px; align-items: flex-start; }
+
+.li-who { min-width: 0; display: flex; flex-direction: column; }
+
+.li-name { font-weight: 600; font-size: 14.5px; line-height: 1.3; }
+.li-name a { color: inherit; text-decoration: none; }
+.li-name a:hover { text-decoration: underline; }
+
+.li-headline {
+  font-size: 12.5px;
+  color: var(--muted);
+  line-height: 1.35;
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.li-meta { font-size: 12px; color: var(--muted); margin-top: 2px; }
+
+.li-body {
+  padding: 0 16px 12px;
+  font-size: 14.5px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.li-ellipsis { color: var(--muted); }
+
+.li-more {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: var(--muted);
+  cursor: pointer;
+}
+.li-more:hover { color: var(--ink); text-decoration: underline; }
+
+/* Where the platform cuts the post off. The product's whole premise. */
+.li-fold-note {
+  margin: 0 16px 12px;
+  padding: 7px 10px;
+  border-top: 1px dashed var(--line-2);
+  font-size: 11.5px;
+  color: var(--muted);
+}
+
+.li-stats {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  padding: 9px 16px;
+  border-top: 1px solid var(--line);
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.li-open { margin-left: auto; color: var(--magenta); text-decoration: none; }
+.li-open:hover { text-decoration: underline; }
+
+.li-comment {
+  display: flex;
+  gap: 10px;
+  padding: 12px 16px 14px;
+  background: var(--panel-2);
+  border-top: 1px solid var(--line);
+}
+
+.li-comment-body { flex: 1; min-width: 0; }
+
+.li-comment-who { display: flex; flex-direction: column; margin-bottom: 6px; }
+
+textarea.li-input {
+  width: 100%;
+  min-height: 72px;
+  resize: vertical;
+  font: inherit;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--ink);
+  background: var(--panel);
+  border: 1px solid var(--line-2);
+  border-radius: 14px;
+  padding: 10px 13px;
+}
+
+textarea.li-input:focus { outline: 2px solid var(--magenta); outline-offset: -1px; }
+textarea.li-input.post { min-height: 130px; border-radius: var(--radius); margin: 0 16px 14px; width: calc(100% - 32px); }
+
+/* --- Draft shell ------------------------------------------------------ */
+
+.draft { display: flex; flex-direction: column; gap: 10px; }
+
+.draft-bar { display: flex; align-items: center; gap: 10px; font-size: 12px; }
+
+.draft-kind {
+  font-weight: 600;
+  color: var(--ink);
+  font-size: 13px;
+}
+
+.draft-why { color: var(--muted); }
+
+.countdown { color: var(--muted); font-variant-numeric: tabular-nums; }
+.countdown.urgent { color: var(--magenta); font-weight: 600; }
+.countdown.held { color: var(--ok); }
+
+.draft-why-row { font-size: 12px; color: var(--muted); }
+
+.draft-actions { display: flex; align-items: center; gap: 10px; }
+
+button.ghost {
+  background: none;
+  border: 1px solid var(--line-2);
+  border-radius: 999px;
+  padding: 7px 15px;
+  font: inherit;
+  font-size: 13px;
+  color: var(--ink-2);
+  cursor: pointer;
+}
+button.ghost:hover:not(:disabled) { border-color: var(--ink-2); color: var(--ink); }
+
+.counter { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.counter.over { color: var(--magenta); font-weight: 600; }
+
+@media (max-width: 560px) {
+  .profile { flex-wrap: wrap; }
+  .profile-state { width: 100%; }
+}

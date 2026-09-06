@@ -82,6 +82,8 @@ export interface FoundPost {
   postUrl: string | null;
   /** Vanity handle, for linking to the author's profile. */
   authorPublicIdentifier: string | null;
+  /** Signed and expiring; display only. */
+  authorAvatarUrl: string | null;
 }
 
 /** An existing comment on someone else's post. */
@@ -251,6 +253,11 @@ export interface AccountOwner {
   name: string;
   headline: string | null;
   profileUrl: string | null;
+  /** Signed and expiring. Cached for display, refreshed rather than trusted. */
+  avatarUrl: string | null;
+  /** Vanity handle, for linking to the profile. */
+  publicIdentifier: string | null;
+  location: string | null;
   /**
    * Paid tier. This decides the invite ceiling more than anything else we
    * track: a FREE account attaching a note gets roughly five invitations a

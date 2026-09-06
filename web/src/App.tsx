@@ -15,6 +15,7 @@ import { Connections, blockingReason } from './Connections';
 import { Queue } from './Queue';
 import { Drafts } from './Drafts';
 import { Today } from './Today';
+import { Profile } from './Profile';
 
 export type AppConfig = Config;
 
@@ -303,6 +304,8 @@ export function App(): JSX.Element {
       </div>
 
       {tab === 'today' && account && config && (
+        <>
+        <Profile account={account} onChanged={() => void refresh()} />
         <Today
           account={account}
           config={config}
@@ -311,6 +314,7 @@ export function App(): JSX.Element {
           pending={pending}
           onGo={setTab}
         />
+        </>
       )}
 
       {tab === 'compose' && config && (
@@ -338,9 +342,10 @@ export function App(): JSX.Element {
 
       {tab === 'carousel' && <Carousel />}
 
-      {tab === 'drafts' && account && (
+      {tab === 'drafts' && account && config && (
         <Drafts
           account={account}
+          foldCharLimit={config.foldCharLimit}
           drafts={drafts}
           keywords={keywords}
           commentLimit={commentLimit}

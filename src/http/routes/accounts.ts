@@ -7,6 +7,7 @@ import {
   updateAccount,
 } from '../../db/accounts.js';
 import { getAccountOwner, listConnectableAccounts } from '../../providers/index.js';
+import { refreshOwnerProfile } from '../../profile.js';
 import { getAccountState } from '../../state.js';
 import { ownsAccount, resolveAccountId } from '../auth.js';
 import { asyncHandler, badRequest, notFound, param, refused } from '../util.js';
@@ -106,11 +107,17 @@ accountsRouter.post(
     let ownerPersonId: string | null = null;
     let isPremium: boolean | null = null;
     let headline: string | null = null;
+    let avatarUrl: string | null = null;
+    let publicIdentifier: string | null = null;
+    let location: string | null = null;
     try {
       const owner = await getAccountOwner(target.providerAccountId);
       ownerPersonId = owner?.providerPersonId ?? null;
       isPremium = owner?.isPremium ?? null;
       headline = owner?.headline ?? null;
+      avatarUrl = owner?.avatarUrl ?? null;
+      publicIdentifier = owner?.publicIdentifier ?? null;
+      location = owner?.location ?? null;
     } catch {
       // Not fatal: self-filtering and tier-aware caps degrade, the account works.
     }
@@ -119,6 +126,9 @@ accountsRouter.post(
       ownerPersonId,
       isPremium,
       headline,
+      avatarUrl,
+      publicIdentifier,
+      location,
       sendingEnabled: false,
       status: target.health.status === 'active' ? 'paused' : target.health.status,
       pausedReason:
@@ -140,6 +150,22 @@ accountsRouter.get(
     const state = await getAccountState(id);
     if (!state) return notFound(res, 'No such account');
     res.json(state);
+  }),
+);
+
+/** Re-read the owner's profile. Cheap, and the avatar URL expires. */
+accountsRouter.post(
+  '/api/accounts/:id/refresh-profile',
+  asyncHandler(async (req, res) => {
+    const id = param(req, 'id');
+    if (!(await ownsAccount(req, id))) return notFound(res, 'No such account');
+
+    try {
+      await refreshOwnerProfile(id);
+    } catch {
+      // Display data. A failure here must not take the page down with it.
+    }
+    res.json(await getAccountState(id));
   }),
 );
 

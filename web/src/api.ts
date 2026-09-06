@@ -92,6 +92,13 @@ export interface CapView {
 }
 
 export interface AccountState {
+  profile: {
+    name: string;
+    headline: string | null;
+    avatarUrl: string | null;
+    location: string | null;
+    profileUrl: string | null;
+  };
   id: string;
   displayName: string;
   status: 'active' | 'paused' | 'checkpointed' | 'restricted' | 'disconnected';
@@ -153,6 +160,8 @@ export interface DraftSourcePost {
   /** Canonical link to the real post. Always present. */
   postUrl: string;
   authorUrl: string | null;
+  authorAvatarUrl: string | null;
+  postedAt: string | null;
 }
 
 export interface DraftCard {
@@ -275,6 +284,9 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ text }),
     }),
+
+  refreshProfile: (id: string) =>
+    request<AccountState>(`/api/accounts/${id}/refresh-profile`, { method: 'POST' }),
 
   dismissDraft: (id: string) =>
     request<{ ok: true }>(`/api/drafts/${id}/dismiss`, { method: 'POST' }),

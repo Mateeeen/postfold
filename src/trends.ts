@@ -184,6 +184,7 @@ export async function syncTrends(
           postedAt: f.postedAt,
           postUrl: f.postUrl,
           authorPublicIdentifier: f.authorPublicIdentifier,
+          authorAvatarUrl: f.authorAvatarUrl,
         },
         db,
       );

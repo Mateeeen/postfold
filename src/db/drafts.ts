@@ -108,6 +108,7 @@ interface DiscoveredRow {
   discovered_at: string;
   share_url: string | null;
   author_public_identifier: string | null;
+  author_avatar_url: string | null;
 }
 
 const mapDiscovered = (r: DiscoveredRow): DiscoveredPost => ({
@@ -125,11 +126,12 @@ const mapDiscovered = (r: DiscoveredRow): DiscoveredPost => ({
   discoveredAt: fromIsoRequired(r.discovered_at),
   postUrl: r.share_url,
   authorPublicIdentifier: r.author_public_identifier,
+  authorAvatarUrl: r.author_avatar_url,
 });
 
 const DISCOVERED_COLUMNS = `id, account_id, urn, keyword, text, author_name,
   author_headline, author_provider_id, reactions, comments, posted_at,
-  discovered_at, share_url, author_public_identifier`;
+  discovered_at, share_url, author_public_identifier, author_avatar_url`;
 
 /**
  * Upsert refreshes engagement counts but never the keyword or discovery time —
@@ -144,18 +146,21 @@ export async function upsertDiscoveredPost(
     `INSERT INTO discovered_posts (
        id, account_id, urn, keyword, text, author_name, author_headline,
        author_provider_id, reactions, comments, posted_at, discovered_at,
-       share_url, author_public_identifier
+       share_url, author_public_identifier, author_avatar_url
      ) VALUES (
        @id, @accountId, @urn, @keyword, @text, @authorName, @authorHeadline,
        @authorProviderId, @reactions, @comments, @postedAt, @now,
-       @postUrl, @authorPublicIdentifier
+       @postUrl, @authorPublicIdentifier, @authorAvatarUrl
      )
      ON CONFLICT (account_id, urn) DO UPDATE SET
        reactions = excluded.reactions,
        comments = excluded.comments,
        share_url = COALESCE(excluded.share_url, discovered_posts.share_url),
        author_public_identifier =
-         COALESCE(excluded.author_public_identifier, discovered_posts.author_public_identifier)`,
+         COALESCE(excluded.author_public_identifier, discovered_posts.author_public_identifier),
+       -- Refreshed on every sighting: the URL is signed and expires, so the
+       -- newest one we have seen is the one most likely to still load.
+       author_avatar_url = COALESCE(excluded.author_avatar_url, discovered_posts.author_avatar_url)`,
   ).run({
     id: newId(),
     accountId: input.accountId,
@@ -170,6 +175,7 @@ export async function upsertDiscoveredPost(
     postedAt: input.postedAt ? input.postedAt.toISOString() : null,
     postUrl: input.postUrl,
     authorPublicIdentifier: input.authorPublicIdentifier,
+    authorAvatarUrl: input.authorAvatarUrl,
     now: nowIso(),
   });
 

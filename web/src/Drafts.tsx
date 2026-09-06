@@ -10,9 +10,12 @@
 import { useEffect, useState } from 'react';
 import { api, ApiError } from './api';
 import type { AccountState, DraftCard, Keyword, LastSearch } from './api';
+import { CommentBlock, PostCard } from './PostCard';
+import type { PostIdentity } from './PostCard';
 
 interface Props {
   account: AccountState;
+  foldCharLimit: number;
   drafts: DraftCard[];
   keywords: Keyword[];
   commentLimit: number;
@@ -47,12 +50,17 @@ function useCountdown(iso: string | null): { label: string; urgent: boolean } | 
 
 function DraftItem({
   draft,
+  me,
   commentLimit,
+  foldCharLimit,
   blocked,
   onChanged,
 }: {
   draft: DraftCard;
+  /** Who the draft will go out as. */
+  me: PostIdentity;
   commentLimit: number;
+  foldCharLimit: number;
   blocked: string | null;
   onChanged: () => void;
 }): JSX.Element {
@@ -76,70 +84,68 @@ function DraftItem({
   const over = draft.kind === 'comment' && text.length > commentLimit;
 
   return (
-    <div className="card">
-      <div className="card-head">
-        <span className="name">{draft.kind === 'post' ? 'Post' : 'Comment'}</span>
-        {draft.sourcePost && (
-          <span className="headline">
-            on{' '}
-            {draft.sourcePost.authorUrl ? (
-              <a
-                href={draft.sourcePost.authorUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="ext"
-              >
-                {draft.sourcePost.authorName}
-              </a>
-            ) : (
-              draft.sourcePost.authorName
-            )}
-            &rsquo;s post &middot; {draft.sourcePost.keyword}
-          </span>
-        )}
+    <div className="draft">
+      <div className="draft-bar">
+        <span className="draft-kind">
+          {draft.kind === 'post' ? 'Your post' : 'Your comment'}
+        </span>
+        {draft.sourcePost && <span className="draft-why">found via “{draft.sourcePost.keyword}”</span>}
         <span className="spacer" />
         {countdown ? (
-          <span className={countdown.urgent ? 'strip-value alert' : 'meta'}>
+          <span className={countdown.urgent ? 'countdown urgent' : 'countdown'}>
             {countdown.label}
           </span>
         ) : (
-          <span className="meta">waits for you</span>
+          <span className="countdown held">waits for you</span>
         )}
       </div>
 
-      {draft.sourcePost && (
-        <div className="did">
-          <span className="kind">
-            Replying to {draft.sourcePost.authorName}
-            {draft.sourcePost.authorHeadline ? ` — ${draft.sourcePost.authorHeadline}` : ''}
-            {' · '}
-            {draft.sourcePost.reactions} reactions
-          </span>
-          {draft.sourcePost.text.slice(0, 400)}
-          {draft.sourcePost.text.length > 400 ? '…' : ''}
-          <div style={{ marginTop: 8 }}>
-            {/* Read the real thing before replying to it. */}
-            <a
-              href={draft.sourcePost.postUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="ext"
-            >
-              Open on LinkedIn ↗
-            </a>
-          </div>
-        </div>
+      {/* A comment is a reply to something. Show the something, as it looks. */}
+      {draft.kind === 'comment' && draft.sourcePost ? (
+        <PostCard
+          who={{
+            name: draft.sourcePost.authorName,
+            headline: draft.sourcePost.authorHeadline,
+            avatarUrl: draft.sourcePost.authorAvatarUrl,
+            profileUrl: draft.sourcePost.authorUrl,
+          }}
+          text={draft.sourcePost.text}
+          postedAt={draft.sourcePost.postedAt}
+          reactions={draft.sourcePost.reactions}
+          comments={draft.sourcePost.comments}
+          postUrl={draft.sourcePost.postUrl}
+          foldCharLimit={foldCharLimit}
+          footer={
+            <CommentBlock who={me}>
+              <textarea
+                className="li-input"
+                value={text}
+                onChange={(e) => setText(e.target.value)}
+                aria-label="Your comment"
+                disabled={blocked !== null}
+              />
+            </CommentBlock>
+          }
+        />
+      ) : (
+        <PostCard
+          who={me}
+          text={text}
+          foldCharLimit={foldCharLimit}
+          draft
+          footer={
+            <textarea
+              className="li-input post"
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              aria-label="Your post"
+              disabled={blocked !== null}
+            />
+          }
+        />
       )}
 
-      <textarea
-        value={text}
-        onChange={(e) => setText(e.target.value)}
-        aria-label={`Draft ${draft.kind}`}
-        disabled={blocked !== null}
-        style={{ minHeight: draft.kind === 'post' ? 140 : 74 }}
-      />
-
-      <div className="row" style={{ marginTop: 6 }}>
+      <div className="draft-why-row">
         <span className="meta">
           {draft.rationale}
           {draft.model ? ` · ${draft.model}` : ''}
@@ -149,24 +155,24 @@ function DraftItem({
       {blocked ? (
         <div className="blocked">{blocked}</div>
       ) : (
-        <div className="card-foot">
+        <div className="draft-actions">
           <button
             className="primary"
             disabled={busy || over || text.trim() === ''}
             onClick={() => void act(() => api.approveDraft(draft.id, text.trim()))}
           >
-            Approve now
+            {draft.kind === 'post' ? 'Publish now' : 'Post comment now'}
           </button>
           <button
-            className="link"
+            className="ghost"
             disabled={busy}
             onClick={() => void act(() => api.dismissDraft(draft.id))}
           >
-            Dismiss
+            Reject
           </button>
           <span className="spacer" />
           {draft.kind === 'comment' && (
-            <span className="meta" style={over ? { color: 'var(--magenta)' } : undefined}>
+            <span className={over ? 'counter over' : 'counter'}>
               {text.length}/{commentLimit}
             </span>
           )}
@@ -337,6 +343,7 @@ function Keywords({
 
 export function Drafts({
   account,
+  foldCharLimit,
   drafts,
   keywords,
   commentLimit,
@@ -349,6 +356,14 @@ export function Drafts({
   // Comments share the account's health, so the same conditions that hold
   // invites hold comments. Surface the reason rather than letting an approve
   // fail at the queue.
+  // Who these go out as. The same identity the platform would show.
+  const me: PostIdentity = {
+    name: account.profile.name,
+    headline: account.profile.headline,
+    avatarUrl: account.profile.avatarUrl,
+    profileUrl: account.profile.profileUrl,
+  };
+
   const blocked = account.caps.post_comment?.allowed === false
     ? account.caps.post_comment.reason
     : !account.sendingEnabled
@@ -392,7 +407,9 @@ export function Drafts({
             <DraftItem
               key={d.id}
               draft={d}
+              me={me}
               commentLimit={commentLimit}
+              foldCharLimit={foldCharLimit}
               blocked={blocked}
               onChanged={onChanged}
             />

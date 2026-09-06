@@ -182,6 +182,7 @@ export class FakeProvider implements SocialProvider {
         postedAt: new Date(),
         postUrl: 'https://www.linkedin.com/feed/update/urn:li:activity:fake/',
         authorPublicIdentifier: 'example-robin',
+        authorAvatarUrl: null,
       },
     ];
   }

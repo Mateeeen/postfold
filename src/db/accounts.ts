@@ -37,6 +37,9 @@ export interface AccountRow {
   owner_person_id: string | null;
   is_premium: number | null;
   headline: string | null;
+  avatar_url: string | null;
+  public_identifier: string | null;
+  location: string | null;
 }
 
 export function mapAccount(row: AccountRow): Account {
@@ -61,13 +64,16 @@ export function mapAccount(row: AccountRow): Account {
     ownerPersonId: row.owner_person_id,
     isPremium: row.is_premium === null ? null : row.is_premium === 1,
     headline: row.headline,
+    avatarUrl: row.avatar_url,
+    publicIdentifier: row.public_identifier,
+    location: row.location,
   };
 }
 
 const SELECT = `SELECT id, user_id, provider_account_id, display_name, status,
   sending_enabled, paused_reason, connected_at, timezone, send_days,
   window_start_hour, window_end_hour, daily_cap_override, checkpoint_until,
-  owner_person_id, is_premium, headline
+  owner_person_id, is_premium, headline, avatar_url, public_identifier, location
   FROM accounts`;
 
 export async function getAccount(id: string, db: Db = getDb()): Promise<Account | null> {
@@ -138,6 +144,9 @@ export interface AccountPatch {
   ownerPersonId?: string | null;
   isPremium?: boolean | null;
   headline?: string | null;
+  avatarUrl?: string | null;
+  publicIdentifier?: string | null;
+  location?: string | null;
 }
 
 export async function updateAccount(
@@ -181,6 +190,18 @@ export async function updateAccount(
   if (patch.headline !== undefined) {
     sets.push('headline = @headline');
     params['headline'] = patch.headline;
+  }
+  if (patch.avatarUrl !== undefined) {
+    sets.push('avatar_url = @avatarUrl');
+    params['avatarUrl'] = patch.avatarUrl;
+  }
+  if (patch.publicIdentifier !== undefined) {
+    sets.push('public_identifier = @publicIdentifier');
+    params['publicIdentifier'] = patch.publicIdentifier;
+  }
+  if (patch.location !== undefined) {
+    sets.push('location = @location');
+    params['location'] = patch.location;
   }
   if (sets.length === 0) return;
 

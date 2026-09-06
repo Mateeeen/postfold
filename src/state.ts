@@ -44,6 +44,18 @@ export interface AccountState {
     /** False until there are enough settled invites to draw a conclusion. */
     rated: boolean;
   };
+  /**
+   * The owner as a person, for the UI to show. Display only - nothing here
+   * feeds a sending decision.
+   */
+  profile: {
+    name: string;
+    headline: string | null;
+    avatarUrl: string | null;
+    location: string | null;
+    /** Link to the real profile. Null when the platform did not give a handle. */
+    profileUrl: string | null;
+  };
   /** Paid tier, or null when we could not determine it. */
   isPremium: boolean | null;
   /**
@@ -132,6 +144,15 @@ export async function getAccountState(
       sample: acceptance.sample,
       band: band.band,
       rated: band.band !== 'unrated',
+    },
+    profile: {
+      name: account.displayName,
+      headline: account.headline,
+      avatarUrl: account.avatarUrl,
+      location: account.location,
+      profileUrl: account.publicIdentifier
+        ? `https://www.linkedin.com/in/${account.publicIdentifier}/`
+        : null,
     },
     isPremium: account.isPremium,
     notesRemaining,

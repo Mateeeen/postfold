@@ -42,6 +42,7 @@ import type { SocialProvider } from '../provider.js';
 import { getProvider } from '../providers/index.js';
 import { syncEngagersForPost } from '../engagers.js';
 import { approveDraft, draftComments, draftDailyPost, syncTrends } from '../trends.js';
+import { refreshOwnerProfile } from '../profile.js';
 import { pollAcceptance, syncReplies } from '../replies.js';
 import { dueForAutoApproval, getDraft, setDraftStatus } from '../db/drafts.js';
 import type { Action, FailureClass } from '../types.js';
@@ -207,6 +208,15 @@ async function execute(
       } catch (err) {
         draftError = err instanceof Error ? err.message : String(err);
         console.error('[worker] drafting failed after a successful sync', err);
+      }
+
+      // The face and headline go stale on their own: the avatar URL is signed
+      // and expires. Refreshed here so it self-heals rather than degrading to
+      // initials permanently.
+      try {
+        await refreshOwnerProfile(action.accountId, db);
+      } catch (err) {
+        console.warn('[worker] profile refresh failed', err);
       }
 
       // The day's post rides the same sync, for the same reason drafting does:

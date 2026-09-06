@@ -73,6 +73,10 @@ export interface Account {
   isPremium: boolean | null;
   /** The owner's own headline, used to give the drafter their voice. */
   headline: string | null;
+  /** Display only. Signed and expiring, refreshed rather than trusted. */
+  avatarUrl: string | null;
+  publicIdentifier: string | null;
+  location: string | null;
 }
 
 /* ------------------------------------------------------------------ *
@@ -303,6 +307,7 @@ export interface DiscoveredPost {
   /** Where to read the real thing before approving a reply to it. */
   postUrl: string | null;
   authorPublicIdentifier: string | null;
+  authorAvatarUrl: string | null;
 }
 
 export interface Keyword {

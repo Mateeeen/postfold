@@ -85,6 +85,8 @@ draftsRouter.get(
               authorUrl: d.sourcePost.authorPublicIdentifier
                 ? `https://www.linkedin.com/in/${d.sourcePost.authorPublicIdentifier}`
                 : null,
+              authorAvatarUrl: d.sourcePost.authorAvatarUrl,
+              postedAt: d.sourcePost.postedAt ? d.sourcePost.postedAt.toISOString() : null,
             }
           : null,
       })),

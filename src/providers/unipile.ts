@@ -72,6 +72,8 @@ interface UnipileUser {
   headline?: string;
   profile_url?: string;
   public_identifier?: string;
+  /** Signed CDN URL with an expiry baked in. Display only. */
+  profile_picture_url?: string;
 }
 
 interface UnipileReaction {
@@ -145,6 +147,7 @@ interface UnipileCommentResponse {
 
 interface UnipileOwnProfile extends UnipileUser {
   occupation?: string;
+  location?: string;
   premium?: boolean | null;
   recruiter?: unknown;
   sales_navigator?: unknown;
@@ -553,6 +556,7 @@ export class UnipileProvider implements SocialProvider {
         postedAt: item.parsed_datetime ? new Date(item.parsed_datetime) : null,
         postUrl: item.share_url ?? `https://www.linkedin.com/feed/update/${urn}/`,
         authorPublicIdentifier: a.public_identifier ?? null,
+        authorAvatarUrl: a.profile_picture_url ?? null,
       });
     }
     return out;
@@ -659,6 +663,9 @@ export class UnipileProvider implements SocialProvider {
       // profile; every other endpoint calls it `headline`.
       headline: res.occupation ?? person.headline,
       isPremium: typeof res.premium === 'boolean' ? res.premium : null,
+      avatarUrl: res.profile_picture_url ?? null,
+      publicIdentifier: res.public_identifier ?? null,
+      location: res.location ?? null,
     };
   }
 

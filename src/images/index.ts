@@ -5,22 +5,29 @@
 
 import { config, usingFakeImages } from '../config.js';
 import type { ImageProvider } from '../images.js';
-import { FakeImages, TogetherImages } from './together.js';
+import { FakeImages, PollinationsImages, TogetherImages } from './together.js';
 
 let cached: ImageProvider | null = null;
 
 export function getImages(): ImageProvider {
   if (cached) return cached;
-  // No key means no pictures - NOT a placeholder picture. The fake provider
-  // returns a stand-in image, which is right for a test and very wrong on a
-  // live account, where it would be attached to a real post.
-  cached = usingFakeImages
-    ? new FakeImages({ returnNull: true })
-    : new TogetherImages({
-        baseUrl: config.imageBaseUrl,
-        apiKey: config.imageApiKey as string,
-        model: config.imageModel,
-      });
+  if (config.imageProvider === 'none') {
+    // Explicitly off. Returns null rather than a placeholder: a stand-in image
+    // is right for a test and very wrong on a live account, where it would be
+    // attached to a real post.
+    cached = new FakeImages({ returnNull: true });
+  } else if (config.imageProvider === 'pollinations') {
+    cached = new PollinationsImages();
+  } else if (usingFakeImages) {
+    console.warn('[images] no TOGETHER_API_KEY - posts will be drafted without images.');
+    cached = new FakeImages({ returnNull: true });
+  } else {
+    cached = new TogetherImages({
+      baseUrl: config.imageBaseUrl,
+      apiKey: config.imageApiKey as string,
+      model: config.imageModel,
+    });
+  }
   return cached;
 }
 

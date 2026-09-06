@@ -126,3 +126,69 @@ export class FakeImages implements ImageProvider {
     };
   }
 }
+
+/**
+ * Pollinations: free, keyless, no account.
+ *
+ * Here because Together's "Free" model tier still requires credits on the
+ * account, which makes it useless until someone pays. This has no such
+ * gate. The trade is real and worth stating: no uptime guarantee, no
+ * capacity guarantee, and output quality varies run to run.
+ *
+ * Same contract as every other adapter — returns null rather than throwing
+ * when it simply has nothing to give, so a bad day costs an image and never
+ * a post.
+ */
+export class PollinationsImages implements ImageProvider {
+  readonly name = 'pollinations';
+  readonly model: string;
+
+  private readonly fetchImpl: typeof fetch;
+  private readonly timeoutMs: number;
+
+  constructor(config: { model?: string; fetchImpl?: typeof fetch; timeoutMs?: number } = {}) {
+    this.model = config.model ?? 'flux';
+    this.fetchImpl = config.fetchImpl ?? fetch;
+    this.timeoutMs = config.timeoutMs ?? 90_000;
+  }
+
+  async draw(input: { prompt: string }): Promise<GeneratedImage | null> {
+    const url =
+      `https://image.pollinations.ai/prompt/${encodeURIComponent(input.prompt)}` +
+      `?width=1200&height=628&nologo=true&model=${encodeURIComponent(this.model)}`;
+
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), this.timeoutMs);
+
+    try {
+      const res = await this.fetchImpl(url, { signal: controller.signal });
+      if (!res.ok) {
+        throw new ImageError(`Image provider returned ${res.status}`, {
+          retryable: res.status === 429 || res.status >= 500,
+        });
+      }
+
+      const bytes = Buffer.from(await res.arrayBuffer());
+      // Generation is slow enough that a truncated or error response is a real
+      // possibility; anything this small is not a picture.
+      if (bytes.length < 1024) return null;
+
+      const mime = res.headers.get('content-type') ?? 'image/jpeg';
+      return {
+        url: `data:${mime};base64,${bytes.toString('base64')}`,
+        prompt: input.prompt,
+        model: this.model,
+      };
+    } catch (err) {
+      if (err instanceof ImageError) throw err;
+      throw new ImageError(
+        err instanceof Error && err.name === 'AbortError'
+          ? 'Image generation timed out'
+          : 'Could not reach the image provider',
+        { retryable: true },
+      );
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+}

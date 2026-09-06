@@ -26,6 +26,8 @@ export interface Config {
   imageBaseUrl: string;
   imageApiKey: string | null;
   imageModel: string;
+  /** 'together' | 'pollinations' | 'none'. */
+  imageProvider: string;
 }
 
 function optional(name: string): string | null {
@@ -46,6 +48,7 @@ export const config: Config = {
   imageBaseUrl: process.env['IMAGE_BASE_URL'] ?? 'https://api.together.xyz',
   imageApiKey: optional('TOGETHER_API_KEY'),
   imageModel: process.env['IMAGE_MODEL'] ?? 'black-forest-labs/FLUX.1-schnell-Free',
+  imageProvider: process.env['IMAGE_PROVIDER'] ?? 'together',
   appToken: optional('APP_TOKEN'),
   allowedOrigins: (process.env['ALLOWED_ORIGINS'] ?? '')
     .split(',')

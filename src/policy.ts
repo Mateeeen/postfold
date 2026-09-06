@@ -52,13 +52,21 @@ export const LIMITS = {
    */
   PREMIUM_WITH_NOTE_MONTHLY_CAP: 40,
 
-  DAILY_POST_CAP: 3,
+  /**
+   * Posts per day. One.
+   *
+   * This is a product decision, not a safety ceiling: a daily post is the
+   * cadence this tool is built around, and a second post on the same day
+   * competes with the first for the same audience rather than reaching a new
+   * one.
+   */
+  DAILY_POST_CAP: 1,
   DAILY_SYNC_CAP: 24,
 
   /** Absolute ceiling on comments/day. Commenting on strangers' posts is the
    *  most visible automated thing this product does — a burst of them is
    *  exactly what a spam classifier is built to catch. */
-  HARD_DAILY_COMMENT_CAP: 20,
+  HARD_DAILY_COMMENT_CAP: 2,
   /** Keyword searches per day. Read-only, so this is about not hammering the
    *  platform rather than about account safety. */
   DAILY_TREND_SYNC_CAP: 12,
@@ -149,6 +157,18 @@ export const LIMITS = {
   /** Shortest gap between keyword searches. Short enough that the button feels
    *  responsive, long enough that mashing it does not burn the daily cap. */
   TREND_SYNC_MIN_INTERVAL_MS: 10 * 60 * 1000,
+  /**
+   * How often the automation drafts a post, and how far back it looks to
+   * decide today is already spoken for. One a day, per DAILY_POST_CAP.
+   */
+  DAILY_POST_INTERVAL_MS: 24 * 60 * 60 * 1000,
+  /**
+   * How often the automation goes looking for posts to comment on.
+   *
+   * Twice a day against a 2/day comment cap, so a run that finds nothing
+   * worth saying does not cost the whole day.
+   */
+  CONTENT_SYNC_INTERVAL_MS: 12 * 60 * 60 * 1000,
 
   /** Platform's own limit on connection-request notes. */
   MAX_NOTE_CHARS: 200,
@@ -178,11 +198,9 @@ export const WARMUP_LADDER: readonly { throughDay: number; cap: number }[] = [
  * are smaller because the blast radius is other people's comment sections.
  */
 export const COMMENT_WARMUP_LADDER: readonly { throughDay: number; cap: number }[] = [
-  { throughDay: 3, cap: 3 },
-  { throughDay: 7, cap: 6 },
-  { throughDay: 14, cap: 10 },
-  { throughDay: 21, cap: 15 },
-  { throughDay: Number.POSITIVE_INFINITY, cap: 20 },
+  { throughDay: 3, cap: 1 },
+  { throughDay: 7, cap: 2 },
+  { throughDay: Number.POSITIVE_INFINITY, cap: 2 },
 ];
 
 /**

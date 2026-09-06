@@ -41,7 +41,7 @@ import { isProviderError, ProviderError } from '../provider.js';
 import type { SocialProvider } from '../provider.js';
 import { getProvider } from '../providers/index.js';
 import { syncEngagersForPost } from '../engagers.js';
-import { approveDraft, draftComments, syncTrends } from '../trends.js';
+import { approveDraft, draftComments, draftDailyPost, syncTrends } from '../trends.js';
 import { pollAcceptance, syncReplies } from '../replies.js';
 import { dueForAutoApproval, getDraft, setDraftStatus } from '../db/drafts.js';
 import type { Action, FailureClass } from '../types.js';
@@ -92,6 +92,10 @@ async function execute(
   action: Action,
   provider: SocialProvider,
   db: Db,
+  // Threaded from tick rather than read off the wall clock here. The two
+  // disagreeing is what made a failure back off from the wrong instant once
+  // already.
+  now: Date,
 ): Promise<void> {
   const account = await getAccount(action.accountId, db);
   if (!account) throw new Error(`Account ${action.accountId} disappeared`);
@@ -205,6 +209,22 @@ async function execute(
         console.error('[worker] drafting failed after a successful sync', err);
       }
 
+      // The day's post rides the same sync, for the same reason drafting does:
+      // it needs the posts that were just discovered, and a model failure here
+      // must not fail the discovery action and retry the search.
+      let postDrafted = false;
+      try {
+        const p = await draftDailyPost(
+          { accountId: action.accountId, options: { autoApprove: true } },
+          undefined,
+          db,
+          now,
+        );
+        postDrafted = p !== null;
+      } catch (err) {
+        console.error('[worker] daily post drafting failed', err);
+      }
+
       // Recorded so the UI can say what happened rather than leaving the user
       // to infer it from an empty list.
       recordResult(action.id, {
@@ -212,6 +232,7 @@ async function execute(
         postsFound: found.posts,
         drafted,
         declined,
+        postDrafted,
         ...(draftError ? { error: draftError } : {}),
       }, db);
       return;
@@ -334,7 +355,7 @@ export async function tick(
   }
 
   try {
-    await execute(action, provider, db);
+    await execute(action, provider, db, now);
     await markDone(action.id, db);
     if (action.payload.kind === 'send_invite') {
       await setSuggestionStatus(action.payload.suggestionId, 'approved', null, db);
@@ -422,6 +443,32 @@ export async function scheduleMaintenance(
             accountId: id,
             payload: { kind: 'poll_acceptance', inviteIds: [] },
             dedupeKey: `poll:${id}:${Math.floor(now.getTime() / LIMITS.ACCEPTANCE_POLL_INTERVAL_MS)}`,
+            now,
+          },
+          db,
+        );
+      }
+    }
+
+    // The content engine. Without this nothing is automatic: posts are only
+    // discovered when somebody presses a button, and the daily post and the
+    // day's comments never get drafted at all.
+    //
+    // Scheduled through enqueue() like everything else, so it lands inside the
+    // send window with the usual jitter rather than firing on a fixed clock.
+    if (!pending.some((a) => a.kind === 'sync_trends')) {
+      const last = await lastCompletedAt(id, 'sync_trends', db);
+      const due =
+        !last || now.getTime() - last.getTime() >= LIMITS.CONTENT_SYNC_INTERVAL_MS;
+
+      if (due) {
+        await enqueue(
+          {
+            accountId: id,
+            payload: { kind: 'sync_trends', terms: [] },
+            dedupeKey: `content:${id}:${Math.floor(
+              now.getTime() / LIMITS.CONTENT_SYNC_INTERVAL_MS,
+            )}`,
             now,
           },
           db,

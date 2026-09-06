@@ -15,6 +15,7 @@
 import { getAccount } from './db/accounts.js';
 import { createPost, listPosts } from './db/content.js';
 import {
+  countDraftsSince,
   createDraft,
   getDraft,
   listEnabledTerms,
@@ -291,6 +292,31 @@ export async function draftPost(
     },
     db,
   );
+}
+
+/**
+ * The day's post, if today has not had one.
+ *
+ * One a day is the product's cadence, and it is enforced here rather than
+ * left to the queue's create_post budget. The budget would refuse the second
+ * post only after the model had already written it - paying for tokens and
+ * putting a draft in front of the user that can never be sent.
+ *
+ * Counting drafts rather than published posts is deliberate: a draft the user
+ * rejected still used today's slot. Otherwise rejecting one would immediately
+ * produce a replacement, which is nagging rather than automation.
+ *
+ * Returns null when today is already spoken for. That is a normal outcome.
+ */
+export async function draftDailyPost(
+  input: { accountId: string; options: DraftOptions },
+  llm: LlmProvider = getLlm(),
+  db: Db = getDb(),
+  now: Date = new Date(),
+): Promise<Draft | null> {
+  const since = new Date(now.getTime() - LIMITS.DAILY_POST_INTERVAL_MS);
+  if ((await countDraftsSince(input.accountId, 'post', since, db)) > 0) return null;
+  return draftPost(input, llm, db);
 }
 
 /* --- Approval ----------------------------------------------------------- */

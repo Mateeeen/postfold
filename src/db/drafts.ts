@@ -375,6 +375,29 @@ export async function dueForAutoApproval(
   return rows.map(mapDraft);
 }
 
+/**
+ * Drafts of one kind created for this account since `since`.
+ *
+ * Used to hold the automation to one post a day. Counting drafts rather than
+ * published posts is deliberate: a draft that is still waiting, or that the
+ * user rejected, still used up today's slot. Otherwise a rejection would
+ * immediately produce a replacement, which is nagging, not automation.
+ */
+export async function countDraftsSince(
+  accountId: string,
+  kind: DraftKind,
+  since: Date,
+  db: Db = getDb(),
+): Promise<number> {
+  const row = db
+    .prepare(
+      `SELECT COUNT(*) AS n FROM drafts
+        WHERE account_id = ? AND kind = ? AND created_at >= ?`,
+    )
+    .get(accountId, kind, since.toISOString()) as { n: number };
+  return row.n;
+}
+
 export async function countPendingDrafts(
   accountId: string,
   db: Db = getDb(),

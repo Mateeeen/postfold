@@ -20,7 +20,7 @@ import {
 import { LIMITS } from '../src/policy.js';
 import { FakeLlm } from '../src/llm/fake.js';
 import { FakeProvider } from '../src/providers/fake.js';
-import { approveDraft, draftComments, syncTrends } from '../src/trends.js';
+import { approveDraft, draftComments, draftDailyPost, syncTrends } from '../src/trends.js';
 import { sweepAutoApprovals, tick } from '../src/queue/worker.js';
 import { fixture } from './helpers.js';
 import type { Fixture } from './helpers.js';
@@ -383,5 +383,70 @@ describe('voice samples', () => {
     await draftComments({ accountId: f.account.id, options: MANUAL }, llm, f.db, provider);
 
     expect(seen()?.recentPosts).toEqual(['Most LinkedIn posts die at the fold.']);
+  });
+});
+
+/* ================================================================== *
+ * The daily post
+ *
+ * One a day is the product's cadence. The guard lives in drafting, not in
+ * the queue's budget: the budget would refuse the second post only after
+ * the model had already written it.
+ * ================================================================== */
+
+describe('draftDailyPost', () => {
+  it('writes one post', async () => {
+    const f = await seeded();
+    await syncTrends({ accountId: f.account.id }, new FakeProvider(silent), f.db);
+
+    const draft = await draftDailyPost(
+      { accountId: f.account.id, options: AUTO },
+      new FakeLlm(silent),
+      f.db,
+    );
+    expect(draft).not.toBeNull();
+    expect(draft?.kind).toBe('post');
+    expect(draft?.autoApproveAt).not.toBeNull();
+  });
+
+  it('writes nothing when today already has one', async () => {
+    const f = await seeded();
+    await syncTrends({ accountId: f.account.id }, new FakeProvider(silent), f.db);
+    const llm = new FakeLlm(silent);
+
+    await draftDailyPost({ accountId: f.account.id, options: AUTO }, llm, f.db);
+    const second = await draftDailyPost({ accountId: f.account.id, options: AUTO }, llm, f.db);
+
+    expect(second).toBeNull();
+  });
+
+  it('writes again once the day has passed', async () => {
+    const f = await seeded();
+    await syncTrends({ accountId: f.account.id }, new FakeProvider(silent), f.db);
+    const llm = new FakeLlm(silent);
+
+    await draftDailyPost({ accountId: f.account.id, options: AUTO }, llm, f.db);
+    const tomorrow = new Date(Date.now() + LIMITS.DAILY_POST_INTERVAL_MS + 60_000);
+    const next = await draftDailyPost(
+      { accountId: f.account.id, options: AUTO },
+      llm,
+      f.db,
+      tomorrow,
+    );
+
+    expect(next).not.toBeNull();
+  });
+
+  it('counts a rejected draft as having used the day', async () => {
+    // Otherwise rejecting a post immediately produces a replacement, which is
+    // nagging rather than automation.
+    const f = await seeded();
+    await syncTrends({ accountId: f.account.id }, new FakeProvider(silent), f.db);
+    const llm = new FakeLlm(silent);
+
+    const first = await draftDailyPost({ accountId: f.account.id, options: AUTO }, llm, f.db);
+    await setDraftStatus(first!.id, 'dismissed', 'user', null, f.db);
+
+    expect(await draftDailyPost({ accountId: f.account.id, options: AUTO }, llm, f.db)).toBeNull();
   });
 });

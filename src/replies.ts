@@ -114,6 +114,7 @@ export async function syncReplies(
           name: reply.authorName,
           headline: reply.authorHeadline,
           profileUrl: null,
+          avatarUrl: reply.authorAvatarUrl,
         },
         db,
       );

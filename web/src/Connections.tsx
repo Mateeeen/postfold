@@ -1,16 +1,23 @@
 /**
- * Warm connections.
+ * Warm connections — one person at a time.
  *
- * One card per suggestion, approved individually. There is no "approve all"
- * here and there must never be one — see invariant 4. When the account cannot
- * send, the approve button is replaced by the reason rather than left enabled
- * to fail: letting someone approve into a queue that will refuse them is worse
- * than telling them up front.
+ * This is a card stack rather than a list, and that is a safety decision
+ * before it is a design one. Invariant 4 says no connection request is ever
+ * queued without explicit per-person approval, and a list is an invitation to
+ * build select-all on top of it — first as a convenience, then as a default.
+ * A stack has nowhere to put one. The constraint is enforced by the shape of
+ * the screen instead of by a warning nobody reads.
+ *
+ * Keyboard: J/K move, A approves, X dismisses, E edits the note. Approving is
+ * the only action that sends anything, and it is the only one that cannot be
+ * reached by holding a key down — it commits the note as typed, and the next
+ * card starts from a fresh decision.
  */
 
-import { useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, ApiError } from './api';
 import type { AccountState, SuggestionCard } from './api';
+import { Avatar } from './PostCard';
 
 interface Props {
   account: AccountState;
@@ -23,102 +30,7 @@ interface Props {
 /** Why sending is blocked, or null when it is not. */
 export function blockingReason(account: AccountState): string | null {
   const invites = account.caps.send_invite;
-  return invites.allowed ? null : invites.reason ?? 'Sending is paused for this account.';
-}
-
-function Card({
-  suggestion,
-  noteLimit,
-  notesLeft,
-  blocked,
-  onChanged,
-}: {
-  suggestion: SuggestionCard;
-  noteLimit: number;
-  /** False once the monthly note allowance is spent. */
-  notesLeft: boolean;
-  blocked: string | null;
-  onChanged: () => void;
-}): JSX.Element {
-  const [note, setNote] = useState(suggestion.draftNote);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const act = async (fn: () => Promise<unknown>): Promise<void> => {
-    setBusy(true);
-    setError(null);
-    try {
-      await fn();
-      onChanged();
-    } catch (e) {
-      // A 409 reason is written for the user. Show it exactly as it arrived.
-      setError(e instanceof ApiError ? e.reason ?? e.message : 'Something went wrong.');
-      setBusy(false);
-    }
-  };
-
-  const over = note.length > noteLimit;
-
-  return (
-    <div className="card">
-      <div className="card-head">
-        <span className="name">{suggestion.person.name}</span>
-        {suggestion.person.headline && (
-          <span className="headline">{suggestion.person.headline}</span>
-        )}
-        <span className="spacer" />
-        <span className="meta">{suggestion.reason}</span>
-      </div>
-
-      <div className="did">
-        <span className="kind">
-          {suggestion.engagementKind === 'comment' ? 'Commented on your post' : 'Reacted to your post'}
-        </span>
-        {suggestion.commentText ?? <em>No comment — reaction only.</em>}
-      </div>
-
-      <textarea
-        value={note}
-        onChange={(e) => setNote(e.target.value)}
-        aria-label={`Connection note for ${suggestion.person.name}`}
-        disabled={blocked !== null || !notesLeft}
-      />
-
-      {!notesLeft && (
-        <div className="notice" style={{ marginTop: 8, marginBottom: 0 }}>
-          No notes left this month — this invite will send <strong>without a note</strong>,
-          which has a much higher limit.
-        </div>
-      )}
-
-      {blocked ? (
-        <div className="blocked">{blocked}</div>
-      ) : (
-        <div className="card-foot">
-          <button
-            className="primary"
-            disabled={busy || (notesLeft && (over || note.trim() === ''))}
-            onClick={() => void act(() => api.approve(suggestion.id, note.trim()))}
-          >
-            {notesLeft ? 'Approve invite' : 'Approve without note'}
-          </button>
-          <button
-            className="link"
-            disabled={busy}
-            onClick={() => void act(() => api.dismiss(suggestion.id))}
-          >
-            Dismiss
-          </button>
-          <span className="spacer" />
-          <span className="meta" style={over ? { color: 'var(--magenta)' } : undefined}>
-            {note.length}/{noteLimit}
-          </span>
-        </div>
-      )}
-
-      {error && <div className="blocked">{error}</div>}
-    </div>
-  );
+  return invites.allowed ? null : (invites.reason ?? 'Sending is paused for this account.');
 }
 
 export function Connections({
@@ -129,36 +41,206 @@ export function Connections({
   onChanged,
 }: Props): JSX.Element {
   const blocked = blockingReason(account);
+  const notesLeft = account.notesRemaining > 0;
+
+  const [index, setIndex] = useState(0);
+  const [note, setNote] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [editing, setEditing] = useState(false);
+  const noteRef = useRef<HTMLTextAreaElement>(null);
+
+  const current = suggestions[Math.min(index, Math.max(0, suggestions.length - 1))];
+
+  // A new card is a new decision: the note resets to what was drafted for
+  // *this* person, never carries over from the last one.
+  useEffect(() => {
+    setNote(current?.draftNote ?? '');
+    setEditing(false);
+    setError(null);
+  }, [current?.id]);
+
+  const act = useCallback(
+    async (fn: () => Promise<unknown>): Promise<void> => {
+      if (busy) return;
+      setBusy(true);
+      setError(null);
+      try {
+        await fn();
+        // Stay on the same index: the list shortens under us, so this lands on
+        // the next person rather than skipping one.
+        onChanged();
+      } catch (e) {
+        setError(e instanceof ApiError ? (e.reason ?? e.message) : 'Something went wrong.');
+      } finally {
+        setBusy(false);
+      }
+    },
+    [busy, onChanged],
+  );
+
+  const over = note.length > noteLimit;
+  const canApprove =
+    !busy && blocked === null && (!notesLeft || (!over && note.trim() !== ''));
+
+  const approve = useCallback(() => {
+    if (!current || !canApprove) return;
+    void act(() => api.approve(current.id, note.trim()));
+  }, [current, canApprove, act, note]);
+
+  const dismiss = useCallback(() => {
+    if (!current || busy) return;
+    void act(() => api.dismiss(current.id));
+  }, [current, busy, act]);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent): void => {
+      // Never steal a keystroke from the note being written.
+      if (editing || e.metaKey || e.ctrlKey || e.altKey) return;
+      const tag = (e.target as HTMLElement | null)?.tagName;
+      if (tag === 'TEXTAREA' || tag === 'INPUT') return;
+
+      const k = e.key.toLowerCase();
+      if (k === 'j') {
+        setIndex((i) => Math.min(i + 1, suggestions.length - 1));
+      } else if (k === 'k') {
+        setIndex((i) => Math.max(i - 1, 0));
+      } else if (k === 'a') {
+        e.preventDefault();
+        approve();
+      } else if (k === 'x') {
+        e.preventDefault();
+        dismiss();
+      } else if (k === 'e') {
+        e.preventDefault();
+        setEditing(true);
+        setTimeout(() => noteRef.current?.focus(), 0);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [approve, dismiss, editing, suggestions.length]);
 
   if (loading) return <div className="empty">Loading…</div>;
 
-  if (suggestions.length === 0) {
+  if (suggestions.length === 0 || !current) {
     return (
       <div className="empty">
-        No warm connections waiting. Publish a post, then pull its engagers from the Posts list.
+        Nobody waiting. When someone engages with your posts or replies to your comments,
+        they show up here — one at a time.
       </div>
     );
   }
 
   return (
-    <>
+    <div className="stack">
       {blocked && (
         <div className="banner">
           <strong>Invites are on hold.</strong> {blocked}
         </div>
       )}
-      <div className="cards">
-        {suggestions.map((s) => (
-          <Card
-            key={s.id}
-            suggestion={s}
-            noteLimit={noteLimit}
-            notesLeft={account.notesRemaining > 0}
-            blocked={blocked}
-            onChanged={onChanged}
-          />
-        ))}
+
+      <div className="stack-head">
+        <span className="stack-count">
+          {index + 1} <span className="muted">of {suggestions.length}</span>
+        </span>
+        <span className="spacer" />
+        <span className="stack-keys">
+          <kbd>J</kbd>
+          <kbd>K</kbd> move · <kbd>A</kbd> approve · <kbd>X</kbd> skip · <kbd>E</kbd> edit
+        </span>
       </div>
-    </>
+
+      <article className="person">
+        <div className="person-head">
+          <Avatar
+            who={{
+              name: current.person.name,
+              headline: current.person.headline,
+              avatarUrl: current.person.avatarUrl,
+              profileUrl: current.person.profileUrl,
+            }}
+            size={56}
+          />
+          <div className="person-who">
+            <h2 className="person-name">
+              {current.person.profileUrl ? (
+                <a href={current.person.profileUrl} target="_blank" rel="noreferrer">
+                  {current.person.name}
+                </a>
+              ) : (
+                current.person.name
+              )}
+            </h2>
+            {current.person.headline && (
+              <p className="person-headline">{current.person.headline}</p>
+            )}
+          </div>
+        </div>
+
+        {/* What they actually did. The whole reason this person is here. */}
+        <div className="person-did">
+          <span className="did-label">
+            {current.engagementKind === 'comment'
+              ? 'Commented on your post'
+              : 'Reacted to your post'}
+          </span>
+          {current.commentText ? (
+            <blockquote>{current.commentText}</blockquote>
+          ) : (
+            <p className="muted">No comment — a reaction only.</p>
+          )}
+        </div>
+
+        <div className="person-note">
+          <div className="note-head">
+            <span>{notesLeft ? 'Your note' : 'Sending without a note'}</span>
+            <span className="spacer" />
+            {notesLeft && (
+              <span className={over ? 'counter over' : 'counter'}>
+                {note.length}/{noteLimit}
+              </span>
+            )}
+          </div>
+
+          {notesLeft ? (
+            <textarea
+              ref={noteRef}
+              className="li-input"
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              onFocus={() => setEditing(true)}
+              onBlur={() => setEditing(false)}
+              aria-label={`Connection note for ${current.person.name}`}
+              disabled={blocked !== null}
+            />
+          ) : (
+            <p className="muted">
+              The {account.noteAllowance} note-bearing invites for this month are used up.
+              This sends without one, which has a far higher limit.
+            </p>
+          )}
+        </div>
+
+        <div className="person-foot">
+          <button className="primary" disabled={!canApprove} onClick={approve}>
+            {notesLeft ? 'Approve invite' : 'Approve without note'}
+          </button>
+          <button className="ghost" disabled={busy} onClick={dismiss}>
+            Skip
+          </button>
+          <span className="spacer" />
+          <span className="meta">{current.reason}</span>
+        </div>
+
+        {error && <div className="blocked">{error}</div>}
+      </article>
+
+      <p className="stack-foot muted">
+        One person at a time, on purpose. There is no approve-all here and there will not
+        be one — every invite goes out because you looked at this specific person and said
+        yes.
+      </p>
+    </div>
   );
 }

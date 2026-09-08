@@ -98,12 +98,14 @@ export class FakeProvider implements SocialProvider {
         name: 'Dana Okafor',
         headline: 'Head of Growth at Meridian',
         profileUrl: 'https://www.linkedin.com/in/example-dana',
+        avatarUrl: null,
       },
       {
         providerPersonId: 'fake-person-2',
         name: 'Sam Ree',
         headline: 'Founder, Tinyshop',
         profileUrl: 'https://www.linkedin.com/in/example-sam',
+        avatarUrl: null,
       },
     ];
     return {
@@ -227,6 +229,7 @@ export class FakeProvider implements SocialProvider {
           reactions: 1,
           authorProviderId: 'fake-person-4',
           alreadyConnected: false,
+          authorAvatarUrl: null,
         },
         {
           authorName: 'Old Friend',
@@ -235,6 +238,7 @@ export class FakeProvider implements SocialProvider {
           reactions: 0,
           authorProviderId: 'fake-person-5',
           alreadyConnected: true,
+          authorAvatarUrl: null,
         },
       ];
     }
@@ -246,6 +250,7 @@ export class FakeProvider implements SocialProvider {
         reactions: 3,
         authorProviderId: 'fake-person-9',
         alreadyConnected: false,
+        authorAvatarUrl: null,
       },
     ];
   }

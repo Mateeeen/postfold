@@ -31,6 +31,7 @@ suggestionsRouter.get(
           name: s.person.name,
           headline: s.person.headline,
           profileUrl: s.person.profileUrl,
+          avatarUrl: s.person.avatarUrl,
         },
       })),
       noteLimit: LIMITS.MAX_NOTE_CHARS,

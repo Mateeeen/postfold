@@ -141,7 +141,7 @@ describe('pollAcceptance', () => {
   async function sentInvite(f: Fixture, providerPersonId: string, sentAt = new Date()) {
     const person = await upsertPerson(
       f.account.id,
-      { providerPersonId, name: 'Invitee', headline: null, profileUrl: null },
+      { providerPersonId, name: 'Invitee', headline: null, profileUrl: null, avatarUrl: null },
       f.db,
     );
     f.db

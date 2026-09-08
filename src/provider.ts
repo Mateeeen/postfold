@@ -111,6 +111,8 @@ export interface ExistingComment {
   authorProviderId: string | null;
   /** True when this person is already a first-degree connection. */
   alreadyConnected: boolean;
+  /** Signed and expiring; display only. */
+  authorAvatarUrl: string | null;
 }
 
 export interface PostCommentInput {

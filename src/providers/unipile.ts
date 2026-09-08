@@ -135,6 +135,7 @@ interface UnipileExistingComment {
     headline?: string;
     id?: string;
     network_distance?: string;
+    profile_picture_url?: string;
   };
   reaction_counter?: number;
 }
@@ -265,6 +266,7 @@ function personFrom(u: UnipileUser | undefined): Omit<Person, 'id' | 'accountId'
     profileUrl:
       u.profile_url ??
       (u.public_identifier ? `https://www.linkedin.com/in/${u.public_identifier}` : null),
+    avatarUrl: u.profile_picture_url ?? null,
   };
 }
 
@@ -636,6 +638,7 @@ export class UnipileProvider implements SocialProvider {
         alreadyConnected: /FIRST_DEGREE|DISTANCE_1/i.test(
           c.author_details?.network_distance ?? '',
         ),
+        authorAvatarUrl: c.author_details?.profile_picture_url ?? null,
       }));
   }
 

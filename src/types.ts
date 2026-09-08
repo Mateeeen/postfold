@@ -90,6 +90,8 @@ export interface Person {
   name: string;
   headline: string | null;
   profileUrl: string | null;
+  /** Display only. Signed and expiring; refreshed on every sighting. */
+  avatarUrl: string | null;
 }
 
 export type EngagementKind = 'reaction' | 'comment';

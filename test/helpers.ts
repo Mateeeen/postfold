@@ -56,6 +56,7 @@ export async function fixture(
       name: 'Dana Okafor',
       headline: 'Head of Growth at Meridian',
       profileUrl: null,
+      avatarUrl: null,
     },
     db,
   );
@@ -123,6 +124,7 @@ export async function addSuggestion(
       name: `Person ${n}`,
       headline: null,
       profileUrl: null,
+      avatarUrl: null,
     },
     f.db,
   );

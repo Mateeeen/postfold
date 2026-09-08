@@ -118,6 +118,7 @@ interface PersonRow {
   name: string;
   headline: string | null;
   profile_url: string | null;
+  avatar_url: string | null;
 }
 
 const mapPerson = (r: PersonRow): Person => ({
@@ -126,6 +127,7 @@ const mapPerson = (r: PersonRow): Person => ({
   providerPersonId: r.provider_person_id,
   name: r.name,
   headline: r.headline,
+  avatarUrl: r.avatar_url,
   profileUrl: r.profile_url,
 });
 
@@ -140,12 +142,21 @@ export async function upsertPerson(
   db: Db = getDb(),
 ): Promise<Person> {
   db.prepare(
-    `INSERT INTO people (id, account_id, provider_person_id, name, headline, profile_url, created_at)
-     VALUES (@id, @accountId, @providerPersonId, @name, @headline, @profileUrl, @now)
+    `INSERT INTO people (
+       id, account_id, provider_person_id, name, headline, profile_url,
+       avatar_url, created_at
+     )
+     VALUES (
+       @id, @accountId, @providerPersonId, @name, @headline, @profileUrl,
+       @avatarUrl, @now
+     )
      ON CONFLICT (account_id, provider_person_id) DO UPDATE SET
        name = excluded.name,
        headline = COALESCE(excluded.headline, people.headline),
-       profile_url = COALESCE(excluded.profile_url, people.profile_url)`,
+       profile_url = COALESCE(excluded.profile_url, people.profile_url),
+       -- Refreshed on every sighting: the URL is signed and expires, so the
+       -- newest one seen is the one most likely to still load.
+       avatar_url = COALESCE(excluded.avatar_url, people.avatar_url)`,
   ).run({
     id: newId(),
     accountId,
@@ -153,12 +164,14 @@ export async function upsertPerson(
     name: p.name,
     headline: p.headline,
     profileUrl: p.profileUrl,
+    avatarUrl: p.avatarUrl,
     now: nowIso(),
   });
 
   const row = db
     .prepare(
-      `SELECT id, account_id, provider_person_id, name, headline, profile_url
+      `SELECT id, account_id, provider_person_id, name, headline, profile_url,
+              avatar_url
          FROM people WHERE account_id = ? AND provider_person_id = ?`,
     )
     .get(accountId, p.providerPersonId) as PersonRow;
@@ -168,7 +181,7 @@ export async function upsertPerson(
 export async function getPerson(id: string, db: Db = getDb()): Promise<Person | null> {
   const row = db
     .prepare(
-      `SELECT id, account_id, provider_person_id, name, headline, profile_url
+      `SELECT id, account_id, provider_person_id, name, headline, profile_url, avatar_url
          FROM people WHERE id = ?`,
     )
     .get(id) as PersonRow | undefined;
@@ -285,6 +298,7 @@ export async function listSuggestions(
               s.draft_note, s.status, s.created_at, s.decided_at,
               p.id AS p_id, p.account_id AS p_account_id,
               p.provider_person_id, p.name, p.headline, p.profile_url,
+              p.avatar_url,
               COALESCE(po.text, '') AS post_text,
               (SELECT kind FROM engagements e
                 WHERE e.post_id = s.post_id AND e.person_id = s.person_id
@@ -306,6 +320,7 @@ export async function listSuggestions(
     name: string;
     headline: string | null;
     profile_url: string | null;
+    avatar_url: string | null;
     post_text: string;
     engagement_kind: string | null;
     comment_text: string | null;
@@ -320,6 +335,7 @@ export async function listSuggestions(
       name: r.name,
       headline: r.headline,
       profile_url: r.profile_url,
+      avatar_url: r.avatar_url,
     }),
     engagementKind: (r.engagement_kind ?? 'reaction') as EngagementKind,
     commentText: r.comment_text,

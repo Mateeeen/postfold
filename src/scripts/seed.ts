@@ -66,6 +66,7 @@ async function main(): Promise<void> {
       name: 'Dana Okafor',
       headline: 'Head of Growth at Meridian',
       profileUrl: 'https://www.linkedin.com/in/example-dana',
+      avatarUrl: null,
       kind: 'comment' as const,
       commentText:
         'The fold point is the thing nobody optimises for. How are you measuring where it actually lands?',
@@ -75,6 +76,7 @@ async function main(): Promise<void> {
       name: 'Sam Ree',
       headline: 'Founder, Tinyshop',
       profileUrl: 'https://www.linkedin.com/in/example-sam',
+      avatarUrl: null,
       kind: 'reaction' as const,
       commentText: null,
     },
@@ -89,6 +91,7 @@ async function main(): Promise<void> {
         name: sp.name,
         headline: sp.headline,
         profileUrl: sp.profileUrl,
+        avatarUrl: null,
       },
       db,
     );

@@ -132,7 +132,13 @@ export interface SuggestionCard {
   draftNote: string;
   engagementKind: 'comment' | 'reaction';
   commentText: string | null;
-  person: { id: string; name: string; headline: string | null; profileUrl: string | null };
+  person: {
+    id: string;
+    name: string;
+    headline: string | null;
+    profileUrl: string | null;
+    avatarUrl: string | null;
+  };
 }
 
 export interface QueueItem {

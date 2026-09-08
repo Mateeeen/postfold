@@ -792,3 +792,100 @@ kbd {
 @media (max-width: 560px) {
   .stack-keys { display: none; }
 }
+
+/* --- The writing surface --------------------------------------------- *
+ * One surface, not an editor beside a preview. The mirror and the textarea
+ * MUST share every metric in .sheet — if font, padding, line-height or
+ * width drift apart, the fold rule lands in the wrong place and the screen
+ * lies about the one thing it exists to show.
+ * --------------------------------------------------------------------- */
+
+.writer { max-width: 680px; margin: 0 auto; }
+
+.sheet-wrap { position: relative; }
+
+.sheet {
+  /* Shared metrics. Change nothing here without changing it for both. */
+  font-family: var(--sans);
+  font-size: 17px;
+  line-height: 1.6;
+  letter-spacing: -0.003em;
+  padding: 22px 24px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: break-word;
+  min-height: 340px;
+  width: 100%;
+  box-sizing: border-box;
+  margin: 0;
+}
+
+.mirror {
+  color: transparent;
+  background: var(--panel);
+  pointer-events: none;
+  user-select: none;
+}
+
+.mirror-text { color: transparent; }
+
+.sheet.input {
+  position: absolute;
+  inset: 0;
+  background: transparent;
+  color: var(--ink);
+  border-color: transparent;
+  resize: none;
+  display: block;
+}
+
+.sheet.input:focus { outline: none; border-color: var(--line-2); }
+.sheet.input::placeholder { color: var(--muted); }
+
+/* The fold. The only loud thing on this screen. */
+.fold-line {
+  display: block;
+  position: relative;
+  height: 0;
+  border-top: 2px solid var(--magenta);
+  margin: 2px 0;
+}
+
+.fold-tag {
+  position: absolute;
+  right: 0;
+  top: 4px;
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--magenta);
+  background: var(--panel);
+  padding-left: 8px;
+  white-space: nowrap;
+}
+
+/* Everything that is not the words or the fold gets out of the way. */
+.writer-chrome {
+  margin-top: 14px;
+  transition: opacity 220ms ease;
+}
+
+.writer.is-writing .writer-chrome {
+  opacity: 0.12;
+  pointer-events: none;
+}
+
+.writer.is-writing .sheet.input { border-color: transparent; }
+
+@media (prefers-reduced-motion: reduce) {
+  .writer-chrome { transition: none; }
+}
+
+@media (max-width: 600px) {
+  .sheet { font-size: 16px; padding: 18px; }
+  /* A tag over a narrow column collides with the text; the rule alone reads. */
+  .fold-tag { display: none; }
+}

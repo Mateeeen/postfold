@@ -11,7 +11,7 @@
  * be lying to the user about the one thing it exists to show them.
  */
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { AppConfig } from './App';
 
 interface Props {
@@ -171,11 +171,30 @@ export function Composer({ config, onQueuePost }: Props): JSX.Element {
     { kind: 'idle' } | { kind: 'busy' } | { kind: 'error'; message: string } | { kind: 'queued' }
   >({ kind: 'idle' });
 
+  // True while keys are actually landing. Everything that is not the words or
+  // the fold recedes for the duration - the whole point of this screen is to
+  // be a place to write, and a toolbar in peripheral vision is a place to
+  // fiddle. It comes back the moment typing stops.
+  const [writing, setWriting] = useState(false);
+  const idleTimer = useRef<number | null>(null);
+
   const fold = useMemo(
     () => findFold(text, config.foldCharLimit, config.foldLineLimit),
     [text, config],
   );
   const flags = useMemo(() => reachFlags(text, fold), [text, fold]);
+
+  const markWriting = (): void => {
+    setWriting(true);
+    if (idleTimer.current !== null) window.clearTimeout(idleTimer.current);
+    idleTimer.current = window.setTimeout(() => setWriting(false), 1400);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (idleTimer.current !== null) window.clearTimeout(idleTimer.current);
+    };
+  }, []);
 
   const copy = async (): Promise<void> => {
     await navigator.clipboard.writeText(text);
@@ -189,20 +208,49 @@ export function Composer({ config, onQueuePost }: Props): JSX.Element {
     setQueueState(error ? { kind: 'error', message: error } : { kind: 'queued' });
   };
 
+  const cut = fold.reason !== 'none' && fold.below.length > 0;
+
   return (
-    <div className="grid">
-      <div className="panel">
-        <h2>Compose</h2>
+    <div className={writing ? 'writer is-writing' : 'writer'} onMouseMove={() => setWriting(false)}>
+      {/*
+        The editor and the fold marker are one surface, not an editor beside a
+        preview. A preview panel asks the writer to look somewhere else and
+        compare; drawing the rule where the cut actually falls means there is
+        nothing to compare.
+
+        Mechanically: a mirror div holds a transparent copy of the text above
+        the fold, which pushes the rule to exactly the right place, and the
+        real textarea sits on top of it. Both share .sheet so their metrics
+        cannot drift apart.
+      */}
+      <div className="sheet-wrap">
+        <div className="sheet mirror" aria-hidden="true">
+          <span className="mirror-text">{fold.above}</span>
+          {cut && (
+            <span className="fold-line">
+              <span className="fold-tag">
+                the fold · cut by {fold.reason === 'lines' ? 'line count' : 'character count'}
+              </span>
+            </span>
+          )}
+          <span className="mirror-text">{fold.below}</span>
+        </div>
+
         <textarea
-          className="compose"
+          className="sheet input"
           value={text}
-          placeholder="Write your post. The fold marker shows where LinkedIn stops showing it."
+          placeholder="Write your post. The line shows where LinkedIn stops showing it."
           onChange={(e) => {
             setText(e.target.value);
             setQueueState({ kind: 'idle' });
+            markWriting();
           }}
+          onBlur={() => setWriting(false)}
         />
-        <div className="row" style={{ marginTop: 10 }}>
+      </div>
+
+      <div className="writer-chrome">
+        <div className="row">
           <span className="meta">
             {text.length} characters · {fold.above.length} above the fold
           </span>
@@ -221,7 +269,7 @@ export function Composer({ config, onQueuePost }: Props): JSX.Element {
 
         {queueState.kind === 'queued' && (
           <div className="notice" style={{ marginTop: 12, marginBottom: 0 }}>
-            Queued. It will publish inside your send window — see the Queue tab.
+            Queued. It will publish inside your send window — see the Scheduled tab.
           </div>
         )}
         {queueState.kind === 'error' && (
@@ -229,22 +277,6 @@ export function Composer({ config, onQueuePost }: Props): JSX.Element {
             {queueState.message}
           </div>
         )}
-      </div>
-
-      <div className="panel">
-        <h2>What people see</h2>
-        <div className="preview">
-          <span className="above">{fold.above || <span className="see-more">Nothing yet.</span>}</span>
-          {fold.reason !== 'none' && fold.below.length > 0 && (
-            <>
-              <span className="see-more"> …see more</span>
-              <div className="fold-rule">
-                the fold · cut by {fold.reason === 'lines' ? 'line count' : 'character count'}
-              </div>
-              <span className="below">{fold.below}</span>
-            </>
-          )}
-        </div>
 
         {flags.length > 0 && (
           <ul className="flags">

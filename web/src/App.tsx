@@ -307,6 +307,7 @@ export function App(): JSX.Element {
           suggestions={suggestions}
           pending={pending}
           onGo={setTab}
+          onChanged={() => void refresh()}
         />
         </>
       )}

@@ -24,6 +24,8 @@ interface Props {
   suggestions: SuggestionCard[];
   pending: QueueItem[];
   onGo: (tab: 'drafts' | 'connections' | 'queue') => void;
+  /** Reload the app's data. Writing a post changes it. */
+  onChanged: () => void;
 }
 
 /** "in 3h 20m", or "any moment" once it is due. */
@@ -98,6 +100,7 @@ export function Today({
   suggestions,
   pending,
   onGo,
+  onChanged,
 }: Props): JSX.Element {
   const [ideas, setIdeas] = useState<string[] | null>(null);
   const [ideasBusy, setIdeasBusy] = useState(false);
@@ -131,10 +134,13 @@ export function Today({
     setNotice(null);
     try {
       await api.postNow(idea);
-      setNotice('Written. It is in Review, waiting for you — it will not publish on its own.');
+      // Show the thing that was made. Leaving the user on this screen with a
+      // line of text was the whole failure: the draft existed on the server,
+      // and nothing they could see had changed - not the list, not the badge.
+      onChanged();
+      onGo('drafts');
     } catch (e) {
       setNotice(e instanceof ApiError ? (e.reason ?? e.message) : 'Could not write that one.');
-    } finally {
       setWriting(null);
     }
   };

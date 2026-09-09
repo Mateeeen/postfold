@@ -183,6 +183,10 @@ body {
   box-sizing: border-box;
 }
 
+/* The dashboard is scanned in two columns, so it gets the width back that a
+   column of prose does not want. */
+.content:has(.dash) { max-width: 1080px; }
+
 /* Below this the rail becomes a top bar: a 232px column on a phone leaves
    nothing for the thing being read. */
 @media (max-width: 760px) {
@@ -1085,4 +1089,115 @@ button.rail-me-state:disabled { cursor: not-allowed; opacity: 0.65; }
   font-size: 13.5px;
   color: var(--ink);
   font-variant-numeric: tabular-nums;
+}
+
+/* --- Dashboard -------------------------------------------------------- *
+ * Two columns answering two different questions: the main column is "what
+ * could I do next", the rail is "what is the machine doing".
+ * --------------------------------------------------------------------- */
+
+.dash {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(260px, 1fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.dash-main, .dash-rail { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+
+/* Reach. Three numbers, equal weight, no chart — they are checked, not
+   studied, and a sparkline on a number that updates twice a day is theatre. */
+.stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+
+.stat {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+}
+
+.stat-label {
+  font-size: 11px;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+
+.stat-value {
+  font-size: 26px;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+
+.stat-note { font-size: 11.5px; color: var(--muted); margin-top: 4px; }
+
+/* Angles. One sentence each, and the action reads as the next step. */
+.ideas { display: flex; flex-direction: column; gap: 10px; }
+
+.idea {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 13px 15px;
+  background: var(--panel-2);
+}
+
+.idea p { margin: 0 0 8px; font-size: 14px; line-height: 1.5; color: var(--ink); }
+
+.rail-note {
+  font-size: 11.5px;
+  color: var(--muted);
+  line-height: 1.5;
+  margin: 0;
+  padding: 0 2px;
+}
+
+/* The feed. Deliberately terse: this is a glance at what was found, and the
+   full post is one click away rather than reproduced here. */
+.feed { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+
+.feed li {
+  display: flex;
+  gap: 10px;
+  padding: 11px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.feed li:last-child { border-bottom: none; padding-bottom: 0; }
+
+.feed-body { min-width: 0; }
+
+.feed-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ink);
+  text-decoration: none;
+}
+.feed-name:hover { text-decoration: underline; }
+
+.feed-text {
+  margin: 2px 0 3px;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--ink-2);
+}
+
+.feed-meta { font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+.need-what em {
+  display: block;
+  font-style: normal;
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 2px;
+}
+
+@media (max-width: 900px) {
+  .dash { grid-template-columns: 1fr; }
+  .stats { grid-template-columns: repeat(3, 1fr); }
+}
+
+@media (max-width: 520px) {
+  .stats { grid-template-columns: 1fr; }
 }

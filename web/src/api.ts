@@ -99,6 +99,13 @@ export interface AccountState {
     location: string | null;
     profileUrl: string | null;
   };
+  reach: {
+    followers: number | null;
+    connections: number | null;
+    impressions7d: number | null;
+    posts7d: number | null;
+    updatedAt: string | null;
+  };
   id: string;
   displayName: string;
   status: 'active' | 'paused' | 'checkpointed' | 'restricted' | 'disconnected';
@@ -168,6 +175,22 @@ export interface DraftSourcePost {
   authorUrl: string | null;
   authorAvatarUrl: string | null;
   postedAt: string | null;
+}
+
+/** A post someone else wrote, found by keyword. The engage feed. */
+export interface FeedPost {
+  id: string;
+  urn: string;
+  text: string;
+  keyword: string;
+  authorName: string;
+  authorHeadline: string | null;
+  authorAvatarUrl: string | null;
+  authorUrl: string | null;
+  reactions: number;
+  comments: number;
+  postedAt: string | null;
+  postUrl: string;
 }
 
 export interface DraftCard {
@@ -296,8 +319,15 @@ export const api = {
   refreshProfile: (id: string) =>
     request<AccountState>(`/api/accounts/${id}/refresh-profile`, { method: 'POST' }),
 
-  postNow: () =>
-    request<{ draft: DraftCard }>('/api/drafts/post-now', { method: 'POST' }),
+  postNow: (idea?: string) =>
+    request<{ draft: DraftCard }>('/api/drafts/post-now', {
+      method: 'POST',
+      body: JSON.stringify(idea ? { idea } : {}),
+    }),
+
+  ideas: () => request<{ ideas: string[] }>('/api/ideas'),
+
+  feed: () => request<{ posts: FeedPost[] }>('/api/feed'),
 
   dismissDraft: (id: string) =>
     request<{ ok: true }>(`/api/drafts/${id}/dismiss`, { method: 'POST' }),

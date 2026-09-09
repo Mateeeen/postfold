@@ -289,6 +289,25 @@ draftsRouter.get(
  * batch behaviour - an unattended draft publishes itself either way, and
  * having two rules depending on who asked would be worse than one.
  */
+/** Write our own post, built from one specific trending post. */
+draftsRouter.post(
+  '/api/feed/:postId/write-post',
+  asyncHandler(async (req, res) => {
+    const accountId = await resolveAccountId(req);
+    if (!accountId) return notFound(res, 'No account connected');
+
+    const draft = await draftPost({
+      accountId,
+      // Requested while watching, so it waits rather than publishing itself.
+      options: { autoApprove: false },
+      fromPostId: param(req, 'postId'),
+    });
+
+    if (!draft) return refused(res, 'That post is no longer available to build from.');
+    res.status(201).json({ draft });
+  }),
+);
+
 draftsRouter.post(
   '/api/feed/:postId/draft-comment',
   asyncHandler(async (req, res) => {

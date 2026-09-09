@@ -18,6 +18,7 @@ import { Today } from './Today';
 import { Profile } from './Profile';
 import { Published } from './Published';
 import { Comments } from './Comments';
+import { Trending } from './Trending';
 import { Avatar } from './PostCard';
 
 export type AppConfig = Config;
@@ -27,6 +28,7 @@ type Tab =
   | 'compose'
   | 'carousel'
   | 'comments'
+  | 'trending'
   | 'drafts'
   | 'connections'
   | 'published'
@@ -206,6 +208,7 @@ export function App(): JSX.Element {
   // only opened when something looks wrong.
   const NAV: { group: string | null; items: [Tab, string][] }[] = [
     { group: 'Engagement', items: [['comments', 'Comments'], ['connections', 'People']] },
+    { group: 'Make something', items: [['trending', 'Trending']] },
     { group: 'Needs you', items: [['drafts', 'Review']] },
     // Unlabelled: two rows do not need a heading to explain them, and a
     // heading per item is how a five-link sidebar starts feeling like a CRM.
@@ -347,6 +350,15 @@ export function App(): JSX.Element {
       )}
 
       {tab === 'carousel' && <Carousel />}
+
+      {tab === 'trending' && account && config && (
+        <Trending
+          account={account}
+          config={config}
+          onChanged={() => void refresh()}
+          onGo={setTab}
+        />
+      )}
 
       {tab === 'comments' && account && config && (
         <Comments

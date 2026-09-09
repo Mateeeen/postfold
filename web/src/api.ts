@@ -357,6 +357,11 @@ export const api = {
 
   ideas: () => request<{ ideas: string[] }>('/api/ideas'),
 
+  writePostFrom: (postId: string) =>
+    request<{ draft: DraftCard }>(`/api/feed/${encodeURIComponent(postId)}/write-post`, {
+      method: 'POST',
+    }),
+
   draftCommentFor: (postId: string) =>
     request<{ draft: { id: string; text: string } }>(
       `/api/feed/${encodeURIComponent(postId)}/draft-comment`,

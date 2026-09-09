@@ -273,18 +273,34 @@ export async function draftComments(
 
 /** Draft one post from whatever is currently landing in the user's niche. */
 export async function draftPost(
-  input: { accountId: string; options: DraftOptions; idea?: string },
+  input: {
+    accountId: string;
+    options: DraftOptions;
+    idea?: string;
+    /** Build from this specific post rather than the whole recent window. */
+    fromPostId?: string;
+  },
   llm: LlmProvider = getLlm(),
   db: Db = getDb(),
   images: ImageProvider = getImages(),
 ): Promise<Draft | null> {
   const author = await authorContext(input.accountId, db);
-  const trending = await recentDiscoveredPosts(
+  let trending = await recentDiscoveredPosts(
     input.accountId,
     LIMITS.POST_CONTEXT_SAMPLES,
     new Date(Date.now() - LIMITS.POST_CONTEXT_WINDOW_MS),
     db,
   );
+
+  // Building from one chosen post: put it first and keep the rest as
+  // background, rather than dropping them. The others are what stop the
+  // result reading as a reply to a single post the reader never saw.
+  if (input.fromPostId) {
+    const chosen = await getDiscoveredPost(input.fromPostId, db);
+    if (!chosen) return null;
+    trending = [chosen, ...trending.filter((p) => p.id !== chosen.id)];
+  }
+
   if (trending.length === 0) return null;
 
   const result = await llm.draftPost({
@@ -302,7 +318,12 @@ export async function draftPost(
     // Prefer a trending post that carried an image: something that performed
     // visually is a better steer for what this subject looks like than one
     // that was text only.
-    const visual = trending.find((p) => p.attachments.length > 0) ?? trending[0];
+    // When the user chose a post, its subject is the steer - it is the one
+    // they pointed at. Otherwise prefer whichever trending post carried an
+    // image, since something that performed visually is the better guide.
+    const visual = input.fromPostId
+      ? trending[0]
+      : (trending.find((p) => p.attachments.length > 0) ?? trending[0]);
     const drawn = await images.draw({
       prompt: imagePromptFor(result.text, visual?.text),
     });

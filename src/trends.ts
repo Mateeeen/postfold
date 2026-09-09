@@ -299,7 +299,13 @@ export async function draftPost(
   // without one.
   let image: { url: string; prompt: string } | null = null;
   try {
-    const drawn = await images.draw({ prompt: imagePromptFor(result.text) });
+    // Prefer a trending post that carried an image: something that performed
+    // visually is a better steer for what this subject looks like than one
+    // that was text only.
+    const visual = trending.find((p) => p.attachments.length > 0) ?? trending[0];
+    const drawn = await images.draw({
+      prompt: imagePromptFor(result.text, visual?.text),
+    });
     if (drawn) image = { url: drawn.url, prompt: drawn.prompt };
   } catch (err) {
     console.warn('[trends] image generation failed; posting without one', err);
@@ -330,8 +336,13 @@ export async function draftPost(
  * the negative instructions matter more than the positive ones: text rendered
  * into an image is the single clearest sign it was generated.
  */
-export function imagePromptFor(postText: string): string {
+export function imagePromptFor(postText: string, inspiration?: string): string {
   const subject = postText.replace(/\s+/g, ' ').trim().slice(0, 300);
+  // What the field is currently posting about, taken from a trending post
+  // that carried an image of its own. Not that image - no vision model is
+  // available on this key, and a post's words describe its subject more
+  // reliably than a caption of its picture would anyway.
+  const echo = inspiration?.replace(/\s+/g, ' ').trim().slice(0, 200);
   return [
     'Editorial illustration for a professional article about:',
     subject,
@@ -342,6 +353,14 @@ export function imagePromptFor(postText: string): string {
     'No text, no words, no letters, no numbers, no logos, no watermarks.',
     'No people, no faces, no hands. Not a photograph. Not clip art.',
     'No stock-photo handshakes, lightbulbs, rocket ships, or brains.',
+    ...(echo
+      ? [
+          '',
+          'A post doing well on this subject right now covers:',
+          echo,
+          'Draw the same territory, not that post.',
+        ]
+      : []),
   ].join('\n');
 }
 

@@ -144,9 +144,30 @@ export function Today({ account, config, drafts, suggestions, pending, onGo }: P
         <Used label="Comments" cap={account.caps.post_comment} />
         <Used label="Invites" cap={account.caps.send_invite} />
 
+        <dl className="facts">
+          <div>
+            <dt>Warm-up</dt>
+            <dd>
+              day {account.warmupDay} · {account.warmupCap}/day
+            </dd>
+          </div>
+          <div>
+            <dt>Acceptance</dt>
+            <dd>
+              {account.acceptance.rated
+                ? `${Math.round((account.acceptance.rate ?? 0) * 100)}% of ${account.acceptance.sample}`
+                : 'not enough data yet'}
+            </dd>
+          </div>
+          <div>
+            <dt>Next send</dt>
+            <dd>{account.nextScheduledAt ? until(account.nextScheduledAt) : 'nothing queued'}</dd>
+          </div>
+        </dl>
+
         <p className="lede muted">
-          Day {account.warmupDay} since connecting. New accounts start slow on purpose — the
-          invite allowance climbs to {config.hardDailyInviteCap} a day as the account settles.
+          New accounts start slow on purpose — the invite allowance climbs to{' '}
+          {config.hardDailyInviteCap} a day as the account settles.
         </p>
       </section>
     </div>

@@ -52,93 +52,6 @@ function canToggleSending(account: AccountState): boolean {
   );
 }
 
-function AccountStrip({
-  account,
-  onChanged,
-}: {
-  account: AccountState;
-  onChanged: () => void;
-}): JSX.Element {
-  const invites = account.caps.send_invite;
-  const blocked = blockingReason(account);
-  const acceptance = account.acceptance;
-
-  const toggle = async (): Promise<void> => {
-    if (account.sendingEnabled) await api.pause(account.id, 'Paused by you.');
-    else await api.resume(account.id);
-    onChanged();
-  };
-
-  const canToggle = canToggleSending(account);
-
-  return (
-    <>
-      <div className="strip">
-        <div className="strip-cell">
-          <div className="strip-label">Warm-up</div>
-          <div className="strip-value">
-            day {account.warmupDay} · {account.warmupCap}/day
-          </div>
-        </div>
-        <div className="strip-cell">
-          <div className="strip-label">Invites left today</div>
-          {/* The one magenta value in the header: the number that decides
-              whether anything can be approved right now. */}
-          <div className={`strip-value${blocked ? ' alert' : ''}`}>
-            {blocked ? 'on hold' : `${invites.remaining} of ${invites.cap}`}
-          </div>
-        </div>
-        <div className="strip-cell">
-          <div className="strip-label">Notes left</div>
-          <div className="strip-value">
-            {account.notesRemaining} of {account.noteAllowance}
-            <div className="meta">
-              {account.isPremium === null
-                ? 'tier unknown'
-                : account.isPremium
-                  ? 'premium'
-                  : 'free · then no-note invites'}
-            </div>
-          </div>
-        </div>
-        <div className="strip-cell">
-          <div className="strip-label">Acceptance</div>
-          <div className="strip-value small">
-            {acceptance.rate === null
-              ? 'no invites yet'
-              : `${Math.round(acceptance.rate * 100)}% (${acceptance.accepted}/${acceptance.sample})`}
-            <div className="meta">{BAND_LABEL[acceptance.band]}</div>
-          </div>
-        </div>
-        <div className="strip-cell">
-          <div className="strip-label">Next send</div>
-          <div className="strip-value small">
-            {account.nextScheduledAt
-              ? new Date(account.nextScheduledAt).toLocaleString('en-GB', {
-                  timeZone: account.timezone,
-                  weekday: 'short',
-                  hour: '2-digit',
-                  minute: '2-digit',
-                })
-              : 'nothing queued'}
-            <div className="meta">{account.timezone}</div>
-          </div>
-        </div>
-        <div className="strip-cell" style={{ flex: '0 0 auto', display: 'flex', alignItems: 'center' }}>
-          <button onClick={() => void toggle()} disabled={!canToggle}>
-            {account.sendingEnabled ? 'Pause sending' : 'Resume'}
-          </button>
-        </div>
-      </div>
-
-      {blocked && (
-        <div className="banner">
-          <strong>Sending is held.</strong> {blocked}
-        </div>
-      )}
-    </>
-  );
-}
 
 export function App(): JSX.Element {
   const [tab, setTab] = useState<Tab>('today');
@@ -281,10 +194,11 @@ export function App(): JSX.Element {
   // you" is the automation's output waiting on a decision; "Make something" is
   // work the user starts; "Machinery" is the parts that run themselves and are
   // only opened when something looks wrong.
-  const NAV: { group: string; items: [Tab, string][] }[] = [
+  const NAV: { group: string | null; items: [Tab, string][] }[] = [
     { group: 'Needs you', items: [['drafts', 'Review'], ['connections', 'People']] },
-    { group: 'Make something', items: [['compose', 'Write a post'], ['carousel', 'Carousel']] },
-    { group: 'Machinery', items: [['queue', 'Scheduled']] },
+    // Unlabelled: two rows do not need a heading to explain them, and a
+    // heading per item is how a five-link sidebar starts feeling like a CRM.
+    { group: null, items: [['carousel', 'Carousel'], ['queue', 'Scheduled']] },
   ];
 
   const badge = (id: Tab): number => {
@@ -320,8 +234,8 @@ export function App(): JSX.Element {
             </button>
 
             {NAV.map(({ group, items }) => (
-              <div className="rail-group" key={group}>
-                <div className="rail-group-label">{group}</div>
+              <div className="rail-group" key={group ?? 'plain'}>
+                {group && <div className="rail-group-label">{group}</div>}
                 {items.map(([id, label]) => (
                   <button
                     key={id}
@@ -382,12 +296,6 @@ export function App(): JSX.Element {
 
       <main className="content">
         {fatal && <div className="banner">{fatal}</div>}
-        {/* Not permanent chrome. The same numbers live on Today; this is here
-            only when sending is held, where it is the answer to "why is
-            nothing happening". */}
-        {account && blockingReason(account) && (
-          <AccountStrip account={account} onChanged={() => void refresh()} />
-        )}
 
       {tab === 'today' && account && config && (
         <>

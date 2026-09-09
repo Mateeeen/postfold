@@ -172,7 +172,16 @@ body {
   color: var(--muted);
 }
 
-.content { max-width: 820px; padding: 28px 28px 96px; box-sizing: border-box; }
+/* Centred in the space left by the rail, not pinned to it. Reading a column
+   of text hard against a navigation bar with a void on the other side is
+   what made this feel unfinished. */
+.content {
+  width: 100%;
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 36px 28px 96px;
+  box-sizing: border-box;
+}
 
 /* Below this the rail becomes a top bar: a 232px column on a phone leaves
    nothing for the thing being read. */
@@ -479,7 +488,7 @@ button.link { border: none; background: none; color: var(--muted); padding: 4px 
 .today {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 18px;
 }
 
 .panel {
@@ -604,7 +613,7 @@ button.link { border: none; background: none; color: var(--muted); padding: 4px 
   border: 1px solid var(--line);
   border-radius: var(--radius);
   padding: 18px 20px;
-  margin-bottom: 14px;
+  margin-bottom: 18px;
 }
 
 .avatar {
@@ -1050,3 +1059,30 @@ button.rail-me-state {
 
 button.rail-me-state:hover:not(:disabled) { color: var(--ink); }
 button.rail-me-state:disabled { cursor: not-allowed; opacity: 0.65; }
+
+/* Three standing facts, on one line. Not a dashboard row — these are read
+   occasionally, so they sit quietly under the meters they explain. */
+.facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 22px;
+  margin: 4px 0 12px;
+  padding: 12px 0 0;
+  border-top: 1px solid var(--line);
+}
+
+.facts div { display: flex; flex-direction: column; gap: 2px; }
+
+.facts dt {
+  font-size: 10.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.facts dd {
+  margin: 0;
+  font-size: 13.5px;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}

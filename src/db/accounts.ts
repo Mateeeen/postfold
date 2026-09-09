@@ -40,6 +40,11 @@ export interface AccountRow {
   avatar_url: string | null;
   public_identifier: string | null;
   location: string | null;
+  follower_count: number | null;
+  connections_count: number | null;
+  impressions_7d: number | null;
+  posts_7d: number | null;
+  stats_updated_at: string | null;
 }
 
 export function mapAccount(row: AccountRow): Account {
@@ -67,13 +72,19 @@ export function mapAccount(row: AccountRow): Account {
     avatarUrl: row.avatar_url,
     publicIdentifier: row.public_identifier,
     location: row.location,
+    followerCount: row.follower_count,
+    connectionsCount: row.connections_count,
+    impressions7d: row.impressions_7d,
+    posts7d: row.posts_7d,
+    statsUpdatedAt: fromIso(row.stats_updated_at),
   };
 }
 
 const SELECT = `SELECT id, user_id, provider_account_id, display_name, status,
   sending_enabled, paused_reason, connected_at, timezone, send_days,
   window_start_hour, window_end_hour, daily_cap_override, checkpoint_until,
-  owner_person_id, is_premium, headline, avatar_url, public_identifier, location
+  owner_person_id, is_premium, headline, avatar_url, public_identifier, location,
+  follower_count, connections_count, impressions_7d, posts_7d, stats_updated_at
   FROM accounts`;
 
 export async function getAccount(id: string, db: Db = getDb()): Promise<Account | null> {
@@ -150,6 +161,11 @@ export interface AccountPatch {
   avatarUrl?: string | null;
   publicIdentifier?: string | null;
   location?: string | null;
+  followerCount?: number | null;
+  connectionsCount?: number | null;
+  impressions7d?: number | null;
+  posts7d?: number | null;
+  statsUpdatedAt?: Date | null;
 }
 
 export async function updateAccount(
@@ -209,6 +225,26 @@ export async function updateAccount(
   if (patch.publicIdentifier !== undefined) {
     sets.push('public_identifier = @publicIdentifier');
     params['publicIdentifier'] = patch.publicIdentifier;
+  }
+  if (patch.followerCount !== undefined) {
+    sets.push('follower_count = @followerCount');
+    params['followerCount'] = patch.followerCount;
+  }
+  if (patch.connectionsCount !== undefined) {
+    sets.push('connections_count = @connectionsCount');
+    params['connectionsCount'] = patch.connectionsCount;
+  }
+  if (patch.impressions7d !== undefined) {
+    sets.push('impressions_7d = @impressions7d');
+    params['impressions7d'] = patch.impressions7d;
+  }
+  if (patch.posts7d !== undefined) {
+    sets.push('posts_7d = @posts7d');
+    params['posts7d'] = patch.posts7d;
+  }
+  if (patch.statsUpdatedAt !== undefined) {
+    sets.push('stats_updated_at = @statsUpdatedAt');
+    params['statsUpdatedAt'] = patch.statsUpdatedAt ? patch.statsUpdatedAt.toISOString() : null;
   }
   if (patch.location !== undefined) {
     sets.push('location = @location');

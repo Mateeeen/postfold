@@ -55,10 +55,23 @@ export class FakeLlm implements LlmProvider {
     }));
   }
 
+  async suggestPostIdeas(input: {
+    author: unknown;
+    trending: unknown[];
+    count: number;
+  }): Promise<string[]> {
+    this.record('suggestPostIdeas', { count: input.count });
+    return Array.from(
+      { length: input.count },
+      (_, i) => `A position worth arguing, number ${i + 1}.`,
+    );
+  }
+
   async draftPost(input: {
     author: AuthorContext;
     trending: SourcePost[];
     foldCharLimit: number;
+    idea?: string;
   }): Promise<PostDraft> {
     this.record('draftPost', { trending: input.trending.length });
     const top = input.trending[0];

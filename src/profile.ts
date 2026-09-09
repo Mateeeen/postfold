@@ -15,7 +15,7 @@
 import { getAccount, updateAccount } from './db/accounts.js';
 import type { Db } from './db/index.js';
 import { getDb } from './db/index.js';
-import { getAccountOwner } from './providers/index.js';
+import { getAccountOwner, getProvider } from './providers/index.js';
 
 export async function refreshOwnerProfile(
   accountId: string,
@@ -30,6 +30,29 @@ export async function refreshOwnerProfile(
   const owner = await getAccountOwner(account.providerAccountId);
   if (!owner) return false;
 
+  // Impressions are per-post and only the owner's own posts carry them, so the
+  // weekly figure is summed here rather than asked for. Reposts are excluded:
+  // the reach belongs to whoever wrote the thing.
+  let impressions7d: number | null = null;
+  let posts7d: number | null = null;
+  if (owner.providerPersonId) {
+    try {
+      const since = Date.now() - 7 * 24 * 60 * 60 * 1000;
+      const authored = await getProvider().listAuthoredPosts({
+        providerAccountId: account.providerAccountId,
+        providerPersonId: owner.providerPersonId,
+        limit: 25,
+      });
+      const recent = authored.filter(
+        (p) => !p.isRepost && p.postedAt !== null && p.postedAt.getTime() >= since,
+      );
+      impressions7d = recent.reduce((n, p) => n + p.impressions, 0);
+      posts7d = recent.length;
+    } catch {
+      // Reach is decoration. Losing it must not lose the profile refresh.
+    }
+  }
+
   await updateAccount(
     accountId,
     {
@@ -42,6 +65,11 @@ export async function refreshOwnerProfile(
       // means "did not answer", and treating that as "free" would silently
       // cut a premium account's note allowance.
       ...(owner.isPremium === null ? {} : { isPremium: owner.isPremium }),
+      followerCount: owner.followerCount,
+      connectionsCount: owner.connectionsCount,
+      ...(impressions7d === null
+        ? {}
+        : { impressions7d, posts7d, statsUpdatedAt: new Date() }),
     },
     db,
   );

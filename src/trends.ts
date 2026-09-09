@@ -271,7 +271,7 @@ export async function draftComments(
 
 /** Draft one post from whatever is currently landing in the user's niche. */
 export async function draftPost(
-  input: { accountId: string; options: DraftOptions },
+  input: { accountId: string; options: DraftOptions; idea?: string },
   llm: LlmProvider = getLlm(),
   db: Db = getDb(),
   images: ImageProvider = getImages(),
@@ -289,6 +289,7 @@ export async function draftPost(
     author,
     trending: trending.map((p) => toSourcePost(p)),
     foldCharLimit: LIMITS.FOLD_CHAR_LIMIT,
+    idea: input.idea,
   });
 
   // An image is a bonus, never a precondition. If drawing fails the words are
@@ -366,6 +367,28 @@ export async function draftDailyPost(
   const since = new Date(now.getTime() - LIMITS.DAILY_POST_INTERVAL_MS);
   if ((await countDraftsSince(input.accountId, 'post', since, db)) > 0) return null;
   return draftPost(input, llm, db, images);
+}
+
+/** Angles worth writing about, from what the field is discussing right now. */
+export async function postIdeas(
+  accountId: string,
+  count = 3,
+  llm: LlmProvider = getLlm(),
+  db: Db = getDb(),
+): Promise<string[]> {
+  const author = await authorContext(accountId, db);
+  const trending = await recentDiscoveredPosts(
+    accountId,
+    LIMITS.POST_CONTEXT_SAMPLES,
+    new Date(Date.now() - LIMITS.POST_CONTEXT_WINDOW_MS),
+    db,
+  );
+  if (trending.length === 0) return [];
+  return llm.suggestPostIdeas({
+    author,
+    trending: trending.map((p) => toSourcePost(p)),
+    count,
+  });
 }
 
 /* --- Approval ----------------------------------------------------------- */

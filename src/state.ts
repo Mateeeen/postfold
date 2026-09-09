@@ -56,6 +56,17 @@ export interface AccountState {
     /** Link to the real profile. Null when the platform did not give a handle. */
     profileUrl: string | null;
   };
+  /**
+   * Reach, as the platform last reported it. Null means we never found out -
+   * rendered differently from zero, which is a real answer.
+   */
+  reach: {
+    followers: number | null;
+    connections: number | null;
+    impressions7d: number | null;
+    posts7d: number | null;
+    updatedAt: string | null;
+  };
   /** Paid tier, or null when we could not determine it. */
   isPremium: boolean | null;
   /**
@@ -153,6 +164,13 @@ export async function getAccountState(
       profileUrl: account.publicIdentifier
         ? `https://www.linkedin.com/in/${account.publicIdentifier}/`
         : null,
+    },
+    reach: {
+      followers: account.followerCount,
+      connections: account.connectionsCount,
+      impressions7d: account.impressions7d,
+      posts7d: account.posts7d,
+      updatedAt: account.statsUpdatedAt ? account.statsUpdatedAt.toISOString() : null,
     },
     isPremium: account.isPremium,
     notesRemaining,

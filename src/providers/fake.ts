@@ -202,11 +202,17 @@ export class FakeProvider implements SocialProvider {
         text: 'A post I wrote about shipping software that mostly works.',
         isRepost: false,
         postedAt: new Date(),
+        impressions: 0,
+        reactions: 0,
+        comments: 0,
       },
       {
         text: "Someone else's post that I shared without comment.",
         isRepost: true,
         postedAt: new Date(),
+        impressions: 0,
+        reactions: 0,
+        comments: 0,
       },
     ].slice(0, input.limit);
   }

@@ -303,10 +303,46 @@ export class GroqLlm implements LlmProvider {
       .filter((k) => k.term.length > 0);
   }
 
+  async suggestPostIdeas(input: {
+    author: AuthorContext;
+    trending: SourcePost[];
+    count: number;
+  }): Promise<string[]> {
+    const result = await this.complete<{ ideas?: string[] }>(
+      `${voiceRules(input.author)}\n\nReply with JSON only.`,
+      [
+        "These posts are getting engagement in this person's field right now:",
+        '',
+        input.trending
+          .slice(0, 6)
+          .map((p, i) => `--- post ${i + 1} ---\n${describePost(p)}`)
+          .join('\n\n'),
+        '',
+        `Propose ${input.count} angles this person could write about. Each is ONE`,
+        'sentence stating a position, not a topic. "How to use AI tools" is a',
+        'topic and is useless; "AI tools make the review step more important,',
+        'not less" is a position someone can agree or disagree with.',
+        '',
+        'Each must be different enough that writing all three would not produce',
+        'three versions of the same post. Do not reference the posts above -',
+        'the reader has not seen them.',
+        '',
+        'JSON: {"ideas":["...","..."]}',
+      ].join('\n'),
+      700,
+    );
+
+    return (result.ideas ?? [])
+      .map((i) => String(i).trim())
+      .filter((i) => i !== '')
+      .slice(0, input.count);
+  }
+
   async draftPost(input: {
     author: AuthorContext;
     trending: SourcePost[];
     foldCharLimit: number;
+    idea?: string;
   }): Promise<PostDraft> {
     const result = await this.complete<{ text?: string; rationale?: string }>(
       `${voiceRules(input.author)}\n\nReply with JSON only.`,
@@ -318,9 +354,20 @@ export class GroqLlm implements LlmProvider {
           .map((p, i) => `--- post ${i + 1} ---\n${describePost(p)}`)
           .join('\n\n'),
         '',
-        'Write ONE original LinkedIn post from this person, taking a position on',
-        'what these posts are collectively about. Do not summarise them and do not',
-        'reference them directly - the reader has not seen them.',
+        ...(input.idea
+          ? [
+              'Write ONE original LinkedIn post from this person arguing exactly this:',
+              '',
+              `  ${input.idea}`,
+              '',
+              'The posts above are context for what the field is discussing. Do not',
+              'summarise them and do not reference them - the reader has not seen them.',
+            ]
+          : [
+              'Write ONE original LinkedIn post from this person, taking a position on',
+              'what these posts are collectively about. Do not summarise them and do not',
+              'reference them directly - the reader has not seen them.',
+            ]),
         '',
         `THE OPENING. The first ${input.foldCharLimit} characters are all most people`,
         'will ever see, so the first line has to earn the tap. What works: a claim',

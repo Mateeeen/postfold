@@ -121,10 +121,18 @@ interface UnipileSearchItem {
  * not an object — unlike every other endpoint, where the author is nested.
  * Reading it as an object yields undefined and every comment looks anonymous.
  */
+interface UnipileFullProfile {
+  follower_count?: number;
+  connections_count?: number;
+}
+
 interface UnipileAuthoredPost {
   text?: string;
   is_repost?: boolean;
   parsed_datetime?: string;
+  impressions_counter?: number;
+  reaction_counter?: number;
+  comment_counter?: number;
 }
 
 interface UnipileExistingComment {
@@ -604,6 +612,9 @@ export class UnipileProvider implements SocialProvider {
         // parsed_datetime is ISO; `date` is a relative string like "3d" and
         // is not parseable, so it is deliberately ignored.
         postedAt: p.parsed_datetime ? new Date(p.parsed_datetime) : null,
+        impressions: p.impressions_counter ?? 0,
+        reactions: p.reaction_counter ?? 0,
+        comments: p.comment_counter ?? 0,
       }));
   }
 
@@ -685,7 +696,38 @@ export class UnipileProvider implements SocialProvider {
       avatarUrl: res.profile_picture_url ?? null,
       publicIdentifier: res.public_identifier ?? null,
       location: res.location ?? null,
+      ...(await this.ownReach(providerAccountId, person.providerPersonId)),
     };
+  }
+
+  /**
+   * Follower and connection counts.
+   *
+   * A second call, because /users/me does not carry them - only a full profile
+   * retrieve does. Profile retrievals are budgeted on the provider side
+   * (roughly 100 a day by their guidance), which is why this rides the profile
+   * refresh rather than being called per page load.
+   *
+   * Nulls on failure, never zeros: "we did not find out" and "this person has
+   * no followers" are different facts and the UI renders them differently.
+   */
+  private async ownReach(
+    providerAccountId: string,
+    providerPersonId: string,
+  ): Promise<{ followerCount: number | null; connectionsCount: number | null }> {
+    try {
+      const full = await this.request<UnipileFullProfile>(
+        `/api/v1/users/${encodeURIComponent(providerPersonId)}`,
+        { method: 'GET', query: { account_id: providerAccountId } },
+      );
+      return {
+        followerCount: typeof full.follower_count === 'number' ? full.follower_count : null,
+        connectionsCount:
+          typeof full.connections_count === 'number' ? full.connections_count : null,
+      };
+    } catch {
+      return { followerCount: null, connectionsCount: null };
+    }
   }
 
   async listSentInvitations(input: {

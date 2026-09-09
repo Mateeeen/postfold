@@ -6,6 +6,7 @@ import {
   getDraft,
   listDrafts,
   listKeywords,
+  recentDiscoveredPosts,
   setKeywordEnabled,
 } from '../../db/drafts.js';
 import { LIMITS } from '../../policy.js';
@@ -17,7 +18,7 @@ import {
 } from '../../db/actions.js';
 import { enqueue } from '../../queue/scheduler.js';
 import { getAccountState } from '../../state.js';
-import { draftPost, approveDraft, dismissDraft, suggestKeywords } from '../../trends.js';
+import { draftPost, postIdeas, approveDraft, dismissDraft, suggestKeywords } from '../../trends.js';
 import { resolveAccountId } from '../auth.js';
 import { asyncHandler, badRequest, notFound, param, refused } from '../util.js';
 
@@ -214,6 +215,56 @@ draftsRouter.delete(
 
 /* --- Trend sync --------------------------------------------------------- */
 
+/** Angles worth writing about. Cheap and disposable; the user picks one. */
+draftsRouter.get(
+  '/api/ideas',
+  asyncHandler(async (req, res) => {
+    const accountId = await resolveAccountId(req);
+    if (!accountId) return notFound(res, 'No account connected');
+    res.json({ ideas: await postIdeas(accountId) });
+  }),
+);
+
+/**
+ * The posts worth engaging with, newest and most-engaged first.
+ *
+ * The same discovered posts the comment drafter works from, surfaced as a feed
+ * rather than only as the drafts that came out of it - seeing what was found
+ * is how you tell whether the keywords are any good.
+ */
+draftsRouter.get(
+  '/api/feed',
+  asyncHandler(async (req, res) => {
+    const accountId = await resolveAccountId(req);
+    if (!accountId) return notFound(res, 'No account connected');
+
+    const posts = await recentDiscoveredPosts(
+      accountId,
+      20,
+      new Date(Date.now() - LIMITS.POST_CONTEXT_WINDOW_MS),
+    );
+
+    res.json({
+      posts: posts.map((p) => ({
+        id: p.id,
+        urn: p.urn,
+        text: p.text,
+        keyword: p.keyword,
+        authorName: p.authorName,
+        authorHeadline: p.authorHeadline,
+        authorAvatarUrl: p.authorAvatarUrl,
+        authorUrl: p.authorPublicIdentifier
+          ? `https://www.linkedin.com/in/${p.authorPublicIdentifier}`
+          : null,
+        reactions: p.reactions,
+        comments: p.comments,
+        postedAt: p.postedAt ? p.postedAt.toISOString() : null,
+        postUrl: p.postUrl ?? `https://www.linkedin.com/feed/update/${p.urn}/`,
+      })),
+    });
+  }),
+);
+
 /**
  * Write a post now, on request.
  *
@@ -229,7 +280,12 @@ draftsRouter.post(
     const accountId = await resolveAccountId(req);
     if (!accountId) return notFound(res, 'No account connected');
 
-    const draft = await draftPost({ accountId, options: { autoApprove: false } });
+    const idea =
+      typeof req.body?.idea === 'string' && req.body.idea.trim() !== ''
+        ? req.body.idea.trim()
+        : undefined;
+
+    const draft = await draftPost({ accountId, options: { autoApprove: false }, idea });
     if (!draft) {
       return refused(
         res,

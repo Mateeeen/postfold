@@ -71,11 +71,25 @@ export interface LlmProvider {
   /** Propose topics to watch, from the user's own profile and posts. */
   suggestKeywords(input: { author: AuthorContext }): Promise<KeywordSuggestion[]>;
 
+  /**
+   * One-line angles worth writing about, from what the field is discussing.
+   *
+   * Separate from draftPost because it is a different job: cheap, plural, and
+   * disposable. The user picks one and only then does a full post get written.
+   */
+  suggestPostIdeas(input: {
+    author: AuthorContext;
+    trending: SourcePost[];
+    count: number;
+  }): Promise<string[]>;
+
   /** Write a post riffing on what is currently landing in the user's niche. */
   draftPost(input: {
     author: AuthorContext;
     trending: SourcePost[];
     foldCharLimit: number;
+    /** An angle the user picked. When absent the model chooses one. */
+    idea?: string;
   }): Promise<PostDraft>;
 
   /** Write a reply to one specific post. */

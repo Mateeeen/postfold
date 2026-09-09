@@ -77,6 +77,12 @@ export interface Account {
   avatarUrl: string | null;
   publicIdentifier: string | null;
   location: string | null;
+  /** Reach, as last reported. Null means never fetched, not zero. */
+  followerCount: number | null;
+  connectionsCount: number | null;
+  impressions7d: number | null;
+  posts7d: number | null;
+  statsUpdatedAt: Date | null;
 }
 
 /* ------------------------------------------------------------------ *

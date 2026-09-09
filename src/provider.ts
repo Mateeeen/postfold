@@ -100,6 +100,10 @@ export interface AuthoredPost {
   text: string;
   isRepost: boolean;
   postedAt: Date | null;
+  /** Platform-reported. Zero when it did not say, which is not the same as none. */
+  impressions: number;
+  reactions: number;
+  comments: number;
 }
 
 export interface ExistingComment {
@@ -259,6 +263,9 @@ export interface AccountOwner {
   profileUrl: string | null;
   /** Signed and expiring. Cached for display, refreshed rather than trusted. */
   avatarUrl: string | null;
+  /** Null when the provider did not report it, which is not zero. */
+  followerCount: number | null;
+  connectionsCount: number | null;
   /** Vanity handle, for linking to the profile. */
   publicIdentifier: string | null;
   location: string | null;

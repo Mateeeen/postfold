@@ -354,8 +354,22 @@ describe('voice samples', () => {
     const provider = new FakeProvider({
       ...silent,
       authoredPosts: [
-        { text: 'My own words about latency.', isRepost: false, postedAt: new Date() },
-        { text: 'Someone else entirely.', isRepost: true, postedAt: new Date() },
+        {
+          text: 'My own words about latency.',
+          isRepost: false,
+          postedAt: new Date(),
+          impressions: 0,
+          reactions: 0,
+          comments: 0,
+        },
+        {
+          text: 'Someone else entirely.',
+          isRepost: true,
+          postedAt: new Date(),
+          impressions: 0,
+          reactions: 0,
+          comments: 0,
+        },
       ],
     });
     await syncTrends({ accountId: f.account.id }, provider, f.db);

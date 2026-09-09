@@ -19,6 +19,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api, ApiError } from './api';
 import type { AccountState, Config, FeedPost, Keyword } from './api';
 import { PostCard } from './PostCard';
+import { CommentBox } from './CommentBox';
 
 interface Props {
   account: AccountState;
@@ -72,6 +73,20 @@ export function Comments({ account, config, keywords, onChanged, onGo }: Props):
       setBusy(false);
     }
   };
+
+  const me = {
+    name: account.profile.name,
+    headline: account.profile.headline,
+    avatarUrl: account.profile.avatarUrl,
+    profileUrl: account.profile.profileUrl,
+  };
+
+  // Commenting can be held for reasons that have nothing to do with this post
+  // - a checkpoint, a spent daily budget. Saying so on the control beats an
+  // Approve button that fails.
+  const blocked = account.caps.post_comment.allowed
+    ? null
+    : (account.caps.post_comment.reason ?? 'Commenting is paused for this account.');
 
   const comments = account.caps.post_comment;
   const usedToday = Math.max(0, comments.cap - comments.remaining);
@@ -158,13 +173,25 @@ export function Comments({ account, config, keywords, onChanged, onGo }: Props):
               attachments={p.attachments}
               foldCharLimit={config.foldCharLimit}
               footer={
-                <div className="engage-foot">
-                  <span className="chip">{p.keyword}</span>
-                  <span className="spacer" />
-                  <button className="link" onClick={() => onGo('drafts')}>
-                    See drafted comments →
-                  </button>
-                </div>
+                <>
+                  <div className="engage-foot">
+                    <span className="chip">{p.keyword}</span>
+                    <span className="spacer" />
+                    <button className="link" onClick={() => onGo('drafts')}>
+                      All drafts →
+                    </button>
+                  </div>
+                  <CommentBox
+                    post={p}
+                    me={me}
+                    limit={config.maxCommentChars}
+                    blocked={blocked}
+                    onChanged={() => {
+                      void load();
+                      onChanged();
+                    }}
+                  />
+                </>
               }
             />
           ))}
@@ -172,8 +199,8 @@ export function Comments({ account, config, keywords, onChanged, onGo }: Props):
       )}
 
       <p className="rail-note" style={{ marginTop: 6 }}>
-        Comments are written by the model and wait for you in Review. Nothing on this screen
-        posts anything.
+        Approving sends the comment in about five minutes. A comment left alone posts itself
+        when its timer runs out — Skip is how you stop that.
       </p>
     </div>
   );

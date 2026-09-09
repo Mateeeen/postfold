@@ -6,6 +6,7 @@ import {
   getDraft,
   listDrafts,
   listKeywords,
+  pendingDraftsByPost,
   recentDiscoveredPosts,
   setKeywordEnabled,
 } from '../../db/drafts.js';
@@ -18,7 +19,7 @@ import {
 } from '../../db/actions.js';
 import { enqueue } from '../../queue/scheduler.js';
 import { getAccountState } from '../../state.js';
-import { draftPost, postIdeas, approveDraft, dismissDraft, suggestKeywords } from '../../trends.js';
+import { draftPost, draftCommentFor, postIdeas, approveDraft, dismissDraft, suggestKeywords } from '../../trends.js';
 import { resolveAccountId } from '../auth.js';
 import { asyncHandler, badRequest, notFound, param, refused } from '../util.js';
 
@@ -245,6 +246,11 @@ draftsRouter.get(
       new Date(Date.now() - LIMITS.POST_CONTEXT_WINDOW_MS),
     );
 
+    // The comment already written for each post, so the feed can show the post
+    // and the reply together instead of making the user hold two screens in
+    // their head.
+    const drafts = await pendingDraftsByPost(accountId);
+
     res.json({
       posts: posts.map((p) => ({
         id: p.id,
@@ -262,8 +268,46 @@ draftsRouter.get(
         postedAt: p.postedAt ? p.postedAt.toISOString() : null,
         postUrl: p.postUrl ?? `https://www.linkedin.com/feed/update/${p.urn}/`,
         attachments: p.attachments,
+        draft: drafts.has(p.id)
+          ? {
+              id: drafts.get(p.id)!.id,
+              text: drafts.get(p.id)!.text,
+              rationale: drafts.get(p.id)!.rationale,
+              autoApproveAt: drafts.get(p.id)!.autoApproveAt?.toISOString() ?? null,
+            }
+          : null,
       })),
     });
+  }),
+);
+
+/**
+ * Write a comment for one post, now.
+ *
+ * The automation drafts in batches on its own schedule; this is for a post the
+ * user is looking at and wants a reply to. Auto-approve is on, matching the
+ * batch behaviour - an unattended draft publishes itself either way, and
+ * having two rules depending on who asked would be worse than one.
+ */
+draftsRouter.post(
+  '/api/feed/:postId/draft-comment',
+  asyncHandler(async (req, res) => {
+    const accountId = await resolveAccountId(req);
+    if (!accountId) return notFound(res, 'No account connected');
+
+    const draft = await draftCommentFor({
+      accountId,
+      discoveredPostId: param(req, 'postId'),
+      options: { autoApprove: true },
+    });
+
+    if (!draft) {
+      return refused(
+        res,
+        'Nothing worth adding here — the model declined, usually because the thread already covers it.',
+      );
+    }
+    res.status(201).json({ draft: { id: draft.id, text: draft.text } });
   }),
 );
 

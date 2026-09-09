@@ -31,6 +31,7 @@ accountsRouter.get('/api/config', (_req, res) => {
     // Invariant 1 applies to the frontend too.
     dailyPostCap: LIMITS.DAILY_POST_CAP,
     dailyCommentCap: LIMITS.HARD_DAILY_COMMENT_CAP,
+    maxCommentChars: LIMITS.MAX_COMMENT_CHARS,
     weeklyInviteCap: LIMITS.WEEKLY_INVITE_CAP,
     autoApproveHours: LIMITS.AUTO_APPROVE_AFTER_MS / (60 * 60 * 1000),
     manualDelayMinutes: LIMITS.MANUAL_APPROVAL_DELAY_MS / (60 * 1000),

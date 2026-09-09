@@ -15,15 +15,16 @@
 import { getAccount } from './db/accounts.js';
 import { createPost, listPosts } from './db/content.js';
 import {
+  addKeyword,
   countDraftsSince,
   createDraft,
-  recentDiscoveredPosts,
+  getDiscoveredPost,
   getDraft,
   listEnabledTerms,
+  recentDiscoveredPosts,
   setDraftStatus,
   undraftedPosts,
   upsertDiscoveredPost,
-  addKeyword,
 } from './db/drafts.js';
 import type { Db } from './db/index.js';
 import { getDb } from './db/index.js';
@@ -368,6 +369,61 @@ export async function draftDailyPost(
   const since = new Date(now.getTime() - LIMITS.DAILY_POST_INTERVAL_MS);
   if ((await countDraftsSince(input.accountId, 'post', since, db)) > 0) return null;
   return draftPost(input, llm, db, images);
+}
+
+/**
+ * Draft a comment for one specific post, on request.
+ *
+ * draftComments() walks the whole candidate list; this is the same work for a
+ * post the user is looking at right now. It deliberately does not check
+ * whether a draft already exists - the caller asked for this one, and
+ * refusing silently is how a button ends up doing nothing.
+ */
+export async function draftCommentFor(
+  input: { accountId: string; discoveredPostId: string; options: DraftOptions },
+  llm: LlmProvider = getLlm(),
+  db: Db = getDb(),
+  provider: SocialProvider = getProvider(),
+): Promise<Draft | null> {
+  const account = await getAccount(input.accountId, db);
+  if (!account) throw new Error(`Unknown account ${input.accountId}`);
+
+  const post = await getDiscoveredPost(input.discoveredPostId, db);
+  if (!post) return null;
+
+  const author = await authorContext(input.accountId, db, provider);
+
+  let priorComments: SourcePost['priorComments'] = [];
+  try {
+    priorComments = await provider.getPostComments({
+      providerAccountId: account.providerAccountId,
+      postUrn: post.urn,
+      limit: PRIOR_COMMENTS_PER_POST,
+    });
+  } catch (err) {
+    console.warn(`[trends] could not read comments on ${post.urn}`, err);
+  }
+
+  const result = await llm.draftComment({
+    author,
+    post: toSourcePost(post, priorComments),
+    maxChars: LIMITS.MAX_COMMENT_CHARS,
+  });
+
+  if (!result.worthCommenting || result.text.trim() === '') return null;
+
+  return createDraft(
+    {
+      accountId: input.accountId,
+      kind: 'comment',
+      text: result.text,
+      rationale: result.rationale,
+      discoveredPostId: post.id,
+      model: llm.model,
+      autoApproveAt: input.options.autoApprove ? autoApproveAt(new Date()) : null,
+    },
+    db,
+  );
 }
 
 /** Angles worth writing about, from what the field is discussing right now. */

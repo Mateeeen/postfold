@@ -347,6 +347,32 @@ export interface DraftView extends Draft {
   sourcePost: DiscoveredPost | null;
 }
 
+/**
+ * Pending drafts keyed by the post they reply to.
+ *
+ * So the feed can show each post with the comment already written for it,
+ * rather than making the user hold two screens in their head.
+ */
+export async function pendingDraftsByPost(
+  accountId: string,
+  db: Db = getDb(),
+): Promise<Map<string, Draft>> {
+  const rows = db
+    .prepare(
+      `SELECT ${DRAFT_COLUMNS} FROM drafts
+        WHERE account_id = ? AND status = 'pending'
+          AND kind = 'comment' AND discovered_post_id IS NOT NULL`,
+    )
+    .all(accountId) as DraftRow[];
+
+  const out = new Map<string, Draft>();
+  for (const r of rows) {
+    const d = mapDraft(r);
+    if (d.discoveredPostId) out.set(d.discoveredPostId, d);
+  }
+  return out;
+}
+
 export async function listDrafts(
   accountId: string,
   status: DraftStatus = 'pending',

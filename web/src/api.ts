@@ -193,6 +193,14 @@ export interface FeedPost {
   postedAt: string | null;
   postUrl: string;
   attachments: PostAttachment[];
+  /** The comment already written for this post, if there is one. */
+  draft: {
+    id: string;
+    text: string;
+    rationale: string;
+    /** When it posts itself. Null means it waits for a human. */
+    autoApproveAt: string | null;
+  } | null;
 }
 
 /** One of the account owner's own posts, as the platform reports it. */
@@ -266,6 +274,7 @@ export interface Config {
   hardDailyInviteCap: number;
   dailyPostCap: number;
   dailyCommentCap: number;
+  maxCommentChars: number;
   weeklyInviteCap: number;
   autoApproveHours: number;
   manualDelayMinutes: number;
@@ -348,6 +357,12 @@ export const api = {
 
   ideas: () => request<{ ideas: string[] }>('/api/ideas'),
 
+  draftCommentFor: (postId: string) =>
+    request<{ draft: { id: string; text: string } }>(
+      `/api/feed/${encodeURIComponent(postId)}/draft-comment`,
+      { method: 'POST' },
+    ),
+
   publishedPosts: () => request<{ posts: PublishedPost[] }>('/api/posts/published'),
 
   feed: () => request<{ posts: FeedPost[] }>('/api/feed'),
@@ -383,3 +398,6 @@ export const api = {
       method: 'POST',
     }),
 };
+
+/** Re-exported so components can import identity and data from one place. */
+export type { PostIdentity } from './PostCard';

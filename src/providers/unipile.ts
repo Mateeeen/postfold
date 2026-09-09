@@ -755,18 +755,43 @@ export const unipileWebhooks: WebhookAdapter = {
    * parsed JSON reorders keys and changes whitespace, and the signature stops
    * matching for reasons that look like a key problem and are not.
    */
+  /**
+   * Authenticate an inbound webhook.
+   *
+   * Unipile does not sign webhook bodies. What it offers instead is a list of
+   * custom headers attached at registration time and replayed on every
+   * delivery, so the shared secret arrives verbatim in a header rather than as
+   * an HMAC over the body.
+   *
+   * This was written as HMAC-SHA256 first, which would have rejected every
+   * real delivery. Both are accepted now: a value that looks like a hex digest
+   * of the right length is checked as a signature, anything else as the secret
+   * itself. That keeps the door open if signing ever ships, without failing
+   * closed against the mechanism that actually exists.
+   *
+   * The weaker property of a static header is worth stating: it proves the
+   * sender knows the secret, not that the body is untampered. The secret is
+   * only ever sent over TLS to a URL we registered, and the payload is treated
+   * as a hint rather than as truth - see the note in webhooks.ts about
+   * re-reading state from the provider rather than trusting event contents.
+   */
   verify(rawBody, signatureHeader, secret) {
     if (!signatureHeader) return false;
-    const body = typeof rawBody === 'string' ? Buffer.from(rawBody, 'utf8') : rawBody;
-    const expected = crypto.createHmac('sha256', secret).update(body).digest('hex');
-    const provided = signatureHeader.replace(/^sha256=/i, '').trim();
 
-    const a = Buffer.from(expected, 'utf8');
-    const b = Buffer.from(provided, 'utf8');
-    // timingSafeEqual throws on length mismatch, so check length first — and
-    // return false rather than letting the throw become a 500.
-    if (a.length !== b.length) return false;
-    return crypto.timingSafeEqual(a, b);
+    const provided = signatureHeader.replace(/^sha256=/i, '').trim();
+    const compare = (expected: string): boolean => {
+      const a = Buffer.from(expected, 'utf8');
+      const b = Buffer.from(provided, 'utf8');
+      // timingSafeEqual throws on length mismatch, so check length first - and
+      // return false rather than letting the throw become a 500.
+      if (a.length !== b.length) return false;
+      return crypto.timingSafeEqual(a, b);
+    };
+
+    if (compare(secret)) return true;
+
+    const body = typeof rawBody === 'string' ? Buffer.from(rawBody, 'utf8') : rawBody;
+    return compare(crypto.createHmac('sha256', secret).update(body).digest('hex'));
   },
 
   parse(rawBody): InboundEvent {

@@ -144,6 +144,9 @@ export interface AccountPatch {
   ownerPersonId?: string | null;
   isPremium?: boolean | null;
   headline?: string | null;
+  /** Repointing at a new provider tenant. See the reconnect route. */
+  providerAccountId?: string;
+  displayName?: string;
   avatarUrl?: string | null;
   publicIdentifier?: string | null;
   location?: string | null;
@@ -190,6 +193,14 @@ export async function updateAccount(
   if (patch.headline !== undefined) {
     sets.push('headline = @headline');
     params['headline'] = patch.headline;
+  }
+  if (patch.providerAccountId !== undefined) {
+    sets.push('provider_account_id = @providerAccountId');
+    params['providerAccountId'] = patch.providerAccountId;
+  }
+  if (patch.displayName !== undefined) {
+    sets.push('display_name = @displayName');
+    params['displayName'] = patch.displayName;
   }
   if (patch.avatarUrl !== undefined) {
     sets.push('avatar_url = @avatarUrl');

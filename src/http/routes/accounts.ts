@@ -153,6 +153,59 @@ accountsRouter.get(
   }),
 );
 
+/**
+ * Point an existing account at a new provider-side account id.
+ *
+ * The same LinkedIn account behind a new Unipile tenant gets a new id there,
+ * and connecting it fresh would create a second row - orphaning the drafts,
+ * keywords, invite history and note backfill attached to the first, and
+ * restarting the warm-up ladder as though this were a brand new LinkedIn
+ * account. It is not; the platform-side history that warm-up exists to respect
+ * is unchanged, so connectedAt is deliberately left alone.
+ *
+ * Sending is switched off regardless of how it was before. Re-pointing at a
+ * different provider account is exactly the kind of change a person should
+ * confirm by pressing Resume, for the same reason a checkpoint webhook never
+ * re-enables sending on its own.
+ */
+accountsRouter.post(
+  '/api/accounts/:id/reconnect',
+  asyncHandler(async (req, res) => {
+    const id = param(req, 'id');
+    if (!(await ownsAccount(req, id))) return notFound(res, 'No such account');
+
+    const wanted =
+      typeof req.body?.providerAccountId === 'string'
+        ? req.body.providerAccountId.trim()
+        : '';
+    if (wanted === '') return badRequest(res, 'providerAccountId is required.');
+
+    const linked = await listConnectableAccounts();
+    const target = linked.find((a) => a.providerAccountId === wanted);
+    if (!target) return notFound(res, 'No linked account with that id.');
+
+    await updateAccount(id, {
+      providerAccountId: target.providerAccountId,
+      displayName: target.displayName,
+      status: target.health.status === 'active' ? 'paused' : target.health.status,
+      sendingEnabled: false,
+      pausedReason:
+        'Reconnected to a new provider account. Check the account state, then press Resume.',
+    });
+
+    // Owner id, headline and avatar all belong to the old tenant until this
+    // runs; the owner id in particular is what stops us commenting on our own
+    // posts and inviting ourselves.
+    try {
+      await refreshOwnerProfile(id);
+    } catch {
+      // Not fatal. The account works; self-filtering degrades until it succeeds.
+    }
+
+    res.json(await getAccountState(id));
+  }),
+);
+
 /** Re-read the owner's profile. Cheap, and the avatar URL expires. */
 accountsRouter.post(
   '/api/accounts/:id/refresh-profile',

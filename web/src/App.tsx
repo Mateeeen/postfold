@@ -16,6 +16,7 @@ import { Queue } from './Queue';
 import { Drafts } from './Drafts';
 import { Today } from './Today';
 import { Profile } from './Profile';
+import { Avatar } from './PostCard';
 
 export type AppConfig = Config;
 
@@ -34,6 +35,23 @@ const BAND_LABEL: Record<AccountState['acceptance']['band'], string> = {
  * rate with its band, and the next scheduled send — the four things that
  * explain why the queue is behaving the way it is.
  */
+/**
+ * Can sending be turned back on?
+ *
+ * A checkpointed, restricted or disconnected account may always be paused and
+ * never resumed from here - recovering from those requires dealing with the
+ * platform first. Shared so the rail switch and the strip cannot disagree
+ * about whether the button works.
+ */
+function canToggleSending(account: AccountState): boolean {
+  return (
+    account.sendingEnabled ||
+    (account.status !== 'checkpointed' &&
+      account.status !== 'restricted' &&
+      account.status !== 'disconnected')
+  );
+}
+
 function AccountStrip({
   account,
   onChanged,
@@ -51,11 +69,7 @@ function AccountStrip({
     onChanged();
   };
 
-  const canToggle =
-    account.sendingEnabled ||
-    (account.status !== 'checkpointed' &&
-      account.status !== 'restricted' &&
-      account.status !== 'disconnected');
+  const canToggle = canToggleSending(account);
 
   return (
     <>
@@ -263,45 +277,117 @@ export function App(): JSX.Element {
     );
   }
 
+  // Grouped by what each destination is for, not by what it contains. "Needs
+  // you" is the automation's output waiting on a decision; "Make something" is
+  // work the user starts; "Machinery" is the parts that run themselves and are
+  // only opened when something looks wrong.
+  const NAV: { group: string; items: [Tab, string][] }[] = [
+    { group: 'Needs you', items: [['drafts', 'Review'], ['connections', 'People']] },
+    { group: 'Make something', items: [['compose', 'Write a post'], ['carousel', 'Carousel']] },
+    { group: 'Machinery', items: [['queue', 'Scheduled']] },
+  ];
+
+  const badge = (id: Tab): number => {
+    if (id === 'drafts') return drafts.length;
+    if (id === 'connections') return suggestions.length;
+    if (id === 'queue') return pending.length;
+    return 0;
+  };
+
   return (
     <div className="app">
-      <div className="masthead">
-        <h1>PostFold</h1>
-        <span className="sub">{account ? account.displayName : '—'}</span>
-      </div>
+      <aside className="rail">
+        <div className="rail-top">
+          <div className="wordmark">PostFold</div>
 
-      {fatal && <div className="banner">{fatal}</div>}
-      {account && <AccountStrip account={account} onChanged={() => void refresh()} />}
-
-      <div className="tabs" role="tablist">
-        {(
-          [
-            ['today', 'Today'],
-            ['drafts', 'Review'],
-            ['connections', 'People'],
-            ['compose', 'Write a post'],
-            ['carousel', 'Carousel'],
-            ['queue', 'Scheduled'],
-          ] as [Tab, string][]
-        ).map(([id, label]) => (
+          {/* One loud action, above the navigation rather than inside it -
+              writing is the thing this product is for. */}
           <button
-            key={id}
-            className="tab"
-            role="tab"
-            aria-selected={tab === id}
-            onClick={() => setTab(id)}
+            className="rail-cta"
+            onClick={() => setTab('compose')}
+            aria-current={tab === 'compose' ? 'page' : undefined}
           >
-            {label}
-            {id === 'connections' && suggestions.length > 0 && (
-              <span className="count"> {suggestions.length}</span>
-            )}
-            {id === 'drafts' && drafts.length > 0 && (
-              <span className="count"> {drafts.length}</span>
-            )}
-            {id === 'queue' && pending.length > 0 && <span className="count"> {pending.length}</span>}
+            Write a post
           </button>
-        ))}
-      </div>
+
+          <nav className="rail-nav">
+            <button
+              className="rail-link"
+              aria-current={tab === 'today' ? 'page' : undefined}
+              onClick={() => setTab('today')}
+            >
+              Today
+            </button>
+
+            {NAV.map(({ group, items }) => (
+              <div className="rail-group" key={group}>
+                <div className="rail-group-label">{group}</div>
+                {items.map(([id, label]) => (
+                  <button
+                    key={id}
+                    className="rail-link"
+                    aria-current={tab === id ? 'page' : undefined}
+                    onClick={() => setTab(id)}
+                  >
+                    {label}
+                    {badge(id) > 0 && <span className="rail-badge">{badge(id)}</span>}
+                  </button>
+                ))}
+              </div>
+            ))}
+          </nav>
+        </div>
+
+        {/* Whose account this acts as, and whether it is acting. Anchored at
+            the bottom because it is a standing fact, not a destination. */}
+        {account && (
+          <div className="rail-foot">
+            <Avatar
+              who={{
+                name: account.profile.name,
+                headline: account.profile.headline,
+                avatarUrl: account.profile.avatarUrl,
+                profileUrl: null,
+              }}
+              size={30}
+            />
+            <div className="rail-me">
+              <span className="rail-me-name">{account.profile.name}</span>
+              {/* The switch lives with the indicator, and on every screen: the
+                  moment you want to stop this thing is not the moment to go
+                  looking for where the control lives. */}
+              <button
+                className="rail-me-state"
+                disabled={!canToggleSending(account)}
+                title={
+                  canToggleSending(account)
+                    ? undefined
+                    : 'Sending cannot be resumed until the account is healthy again.'
+                }
+                onClick={() => {
+                  void (async () => {
+                    if (account.sendingEnabled) await api.pause(account.id, 'Paused by you.');
+                    else await api.resume(account.id);
+                    refresh();
+                  })();
+                }}
+              >
+                <span className={account.sendingEnabled ? 'dot live' : 'dot held'} />
+                {account.sendingEnabled ? 'Running' : 'Paused'}
+              </button>
+            </div>
+          </div>
+        )}
+      </aside>
+
+      <main className="content">
+        {fatal && <div className="banner">{fatal}</div>}
+        {/* Not permanent chrome. The same numbers live on Today; this is here
+            only when sending is held, where it is the answer to "why is
+            nothing happening". */}
+        {account && blockingReason(account) && (
+          <AccountStrip account={account} onChanged={() => void refresh()} />
+        )}
 
       {tab === 'today' && account && config && (
         <>
@@ -375,6 +461,7 @@ export function App(): JSX.Element {
           onChanged={() => void refresh()}
         />
       )}
+      </main>
     </div>
   );
 }

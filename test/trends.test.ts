@@ -355,6 +355,8 @@ describe('voice samples', () => {
       ...silent,
       authoredPosts: [
         {
+          urn: 'urn:fake:post:own',
+          postUrl: null,
           text: 'My own words about latency.',
           isRepost: false,
           postedAt: new Date(),
@@ -363,6 +365,8 @@ describe('voice samples', () => {
           comments: 0,
         },
         {
+          urn: 'urn:fake:post:own',
+          postUrl: null,
           text: 'Someone else entirely.',
           isRepost: true,
           postedAt: new Date(),

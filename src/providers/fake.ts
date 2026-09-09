@@ -199,6 +199,8 @@ export class FakeProvider implements SocialProvider {
     if (this.authoredPosts) return this.authoredPosts.slice(0, input.limit);
     return [
       {
+        urn: 'urn:fake:post:own',
+        postUrl: null,
         text: 'A post I wrote about shipping software that mostly works.',
         isRepost: false,
         postedAt: new Date(),
@@ -207,6 +209,8 @@ export class FakeProvider implements SocialProvider {
         comments: 0,
       },
       {
+        urn: 'urn:fake:post:repost',
+        postUrl: null,
         text: "Someone else's post that I shared without comment.",
         isRepost: true,
         postedAt: new Date(),

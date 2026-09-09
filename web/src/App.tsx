@@ -16,11 +16,12 @@ import { Queue } from './Queue';
 import { Drafts } from './Drafts';
 import { Today } from './Today';
 import { Profile } from './Profile';
+import { Published } from './Published';
 import { Avatar } from './PostCard';
 
 export type AppConfig = Config;
 
-type Tab = 'today' | 'compose' | 'carousel' | 'drafts' | 'connections' | 'queue';
+type Tab = 'today' | 'compose' | 'carousel' | 'drafts' | 'connections' | 'published' | 'queue';
 
 const BAND_LABEL: Record<AccountState['acceptance']['band'], string> = {
   unrated: 'not enough data yet',
@@ -198,7 +199,7 @@ export function App(): JSX.Element {
     { group: 'Needs you', items: [['drafts', 'Review'], ['connections', 'People']] },
     // Unlabelled: two rows do not need a heading to explain them, and a
     // heading per item is how a five-link sidebar starts feeling like a CRM.
-    { group: null, items: [['carousel', 'Carousel'], ['queue', 'Scheduled']] },
+    { group: null, items: [['carousel', 'Carousel'], ['published', 'Your posts'], ['queue', 'Scheduled']] },
   ];
 
   const badge = (id: Tab): number => {
@@ -336,6 +337,10 @@ export function App(): JSX.Element {
       )}
 
       {tab === 'carousel' && <Carousel />}
+
+      {tab === 'published' && account && (
+        <Published account={account} onChanged={() => void refresh()} />
+      )}
 
       {tab === 'drafts' && account && config && (
         <Drafts

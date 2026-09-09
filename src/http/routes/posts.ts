@@ -1,3 +1,5 @@
+import { getAccount } from '../../db/accounts.js';
+import { getProvider } from '../../providers/index.js';
 import { Router } from 'express';
 import { createPost, listPosts } from '../../db/content.js';
 import { requestEngagerSync } from '../../engagers.js';
@@ -38,6 +40,46 @@ postsRouter.post(
 
     if (!result.ok) return refused(res, result.reason);
     res.status(201).json({ post, action: result.action });
+  }),
+);
+
+/**
+ * The posts actually on LinkedIn, with what the platform says they did.
+ *
+ * Not the `posts` table, which only holds what was published through this
+ * tool - a fresh install has none, and posts written by hand in the LinkedIn
+ * app never appear there at all. Those are exactly the posts most worth
+ * pulling engagers from, so the list comes from the platform.
+ */
+postsRouter.get(
+  '/api/posts/published',
+  asyncHandler(async (req, res) => {
+    const accountId = await resolveAccountId(req);
+    if (!accountId) return notFound(res, 'No account connected');
+
+    const account = await getAccount(accountId);
+    if (!account?.ownerPersonId) {
+      return res.json({ posts: [], reason: 'The account owner is not known yet.' });
+    }
+
+    const authored = await getProvider().listAuthoredPosts({
+      providerAccountId: account.providerAccountId,
+      providerPersonId: account.ownerPersonId,
+      limit: 20,
+    });
+
+    res.json({
+      posts: authored.map((p) => ({
+        urn: p.urn,
+        text: p.text,
+        isRepost: p.isRepost,
+        postedAt: p.postedAt ? p.postedAt.toISOString() : null,
+        impressions: p.impressions,
+        reactions: p.reactions,
+        comments: p.comments,
+        postUrl: p.postUrl,
+      })),
+    });
   }),
 );
 

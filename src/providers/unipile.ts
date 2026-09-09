@@ -127,6 +127,9 @@ interface UnipileFullProfile {
 }
 
 interface UnipileAuthoredPost {
+  social_id?: string;
+  id?: string;
+  share_url?: string;
   text?: string;
   is_repost?: boolean;
   parsed_datetime?: string;
@@ -607,6 +610,8 @@ export class UnipileProvider implements SocialProvider {
     return (res.items ?? [])
       .filter((p) => (p.text ?? '').trim() !== '')
       .map((p) => ({
+        urn: p.social_id ?? (p.id ? toPostUrn(p.id) : ''),
+        postUrl: p.share_url ?? null,
         text: (p.text ?? '').trim(),
         isRepost: p.is_repost === true,
         // parsed_datetime is ISO; `date` is a relative string like "3d" and

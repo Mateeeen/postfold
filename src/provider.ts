@@ -97,6 +97,9 @@ export interface FoundPost {
  * this seam does not make drafting decisions.
  */
 export interface AuthoredPost {
+  /** Needed to pull engagers; without it this list is only something to read. */
+  urn: string;
+  postUrl: string | null;
   text: string;
   isRepost: boolean;
   postedAt: Date | null;

@@ -193,6 +193,18 @@ export interface FeedPost {
   postUrl: string;
 }
 
+/** One of the account owner's own posts, as the platform reports it. */
+export interface PublishedPost {
+  urn: string;
+  text: string;
+  isRepost: boolean;
+  postedAt: string | null;
+  impressions: number;
+  reactions: number;
+  comments: number;
+  postUrl: string | null;
+}
+
 export interface DraftCard {
   id: string;
   kind: 'post' | 'comment';
@@ -326,6 +338,8 @@ export const api = {
     }),
 
   ideas: () => request<{ ideas: string[] }>('/api/ideas'),
+
+  publishedPosts: () => request<{ posts: PublishedPost[] }>('/api/posts/published'),
 
   feed: () => request<{ posts: FeedPost[] }>('/api/feed'),
 

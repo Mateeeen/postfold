@@ -147,7 +147,9 @@ export class PollinationsImages implements ImageProvider {
   private readonly timeoutMs: number;
 
   constructor(config: { model?: string; fetchImpl?: typeof fetch; timeoutMs?: number } = {}) {
-    this.model = config.model ?? 'flux';
+    // Pollinations' model list is now exactly ["sana"]; asking for "flux"
+    // silently returned Sana instead, which is most of why these looked bad.
+    this.model = config.model ?? 'sana';
     this.fetchImpl = config.fetchImpl ?? fetch;
     this.timeoutMs = config.timeoutMs ?? 90_000;
   }
@@ -190,5 +192,105 @@ export class PollinationsImages implements ImageProvider {
     } finally {
       clearTimeout(timer);
     }
+  }
+}
+
+/**
+ * Google AI Studio — Gemini image generation.
+ *
+ * Chosen over the alternatives for output quality on editorial illustration,
+ * which is the only kind of image this product makes.
+ *
+ * The response is inline base64 rather than a URL, which suits us: the image
+ * is stored as a data URI anyway, so there is no expiring link to lose during
+ * the day a draft spends waiting.
+ */
+export class GeminiImages implements ImageProvider {
+  readonly name = 'gemini';
+  readonly model: string;
+
+  private readonly apiKey: string;
+  private readonly fetchImpl: typeof fetch;
+  private readonly timeoutMs: number;
+
+  constructor(config: {
+    apiKey: string;
+    model?: string;
+    fetchImpl?: typeof fetch;
+    timeoutMs?: number;
+  }) {
+    this.apiKey = config.apiKey;
+    this.model = config.model ?? 'gemini-2.5-flash-image';
+    this.fetchImpl = config.fetchImpl ?? fetch;
+    this.timeoutMs = config.timeoutMs ?? 90_000;
+  }
+
+  async draw(input: { prompt: string }): Promise<GeneratedImage | null> {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), this.timeoutMs);
+
+    let res: Response;
+    try {
+      res = await this.fetchImpl(
+        `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(
+          this.model,
+        )}:generateContent`,
+        {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', 'x-goog-api-key': this.apiKey },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: input.prompt }] }],
+            generationConfig: {
+              responseModalities: ['IMAGE'],
+              // 1.91:1 is what the feed crops a link image to. Asking for it
+              // beats generating a square and letting the platform choose
+              // which third of the picture to throw away.
+              imageConfig: { aspectRatio: '16:9' },
+            },
+          }),
+          signal: controller.signal,
+        },
+      );
+    } catch (err) {
+      throw new ImageError(
+        err instanceof Error && err.name === 'AbortError'
+          ? 'Image generation timed out'
+          : 'Could not reach the image provider',
+        { retryable: true },
+      );
+    } finally {
+      clearTimeout(timer);
+    }
+
+    const text = await res.text();
+    if (!res.ok) {
+      throw new ImageError(`Image provider returned ${res.status}: ${text.slice(0, 200)}`, {
+        retryable: res.status === 429 || res.status >= 500,
+      });
+    }
+
+    let body: {
+      candidates?: {
+        content?: { parts?: { inlineData?: { mimeType?: string; data?: string } }[] };
+        finishReason?: string;
+      }[];
+    };
+    try {
+      body = JSON.parse(text) as typeof body;
+    } catch {
+      throw new ImageError('Image provider returned a non-JSON envelope', { retryable: true });
+    }
+
+    // A safety filter returns a candidate with no image rather than an error.
+    // Null is the right answer for that: the post still goes out, without one.
+    const part = body.candidates?.[0]?.content?.parts?.find((p) => p.inlineData?.data);
+    const data = part?.inlineData?.data;
+    if (!data) return null;
+
+    return {
+      url: `data:${part?.inlineData?.mimeType ?? 'image/png'};base64,${data}`,
+      prompt: input.prompt,
+      model: this.model,
+    };
   }
 }

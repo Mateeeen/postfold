@@ -28,6 +28,7 @@ export interface Config {
   imageModel: string;
   /** 'together' | 'pollinations' | 'none'. */
   imageProvider: string;
+  geminiApiKey: string | null;
 }
 
 function optional(name: string): string | null {
@@ -49,6 +50,7 @@ export const config: Config = {
   imageApiKey: optional('TOGETHER_API_KEY'),
   imageModel: process.env['IMAGE_MODEL'] ?? 'black-forest-labs/FLUX.1-schnell-Free',
   imageProvider: process.env['IMAGE_PROVIDER'] ?? 'together',
+  geminiApiKey: optional('GEMINI_API_KEY'),
   appToken: optional('APP_TOKEN'),
   allowedOrigins: (process.env['ALLOWED_ORIGINS'] ?? '')
     .split(',')

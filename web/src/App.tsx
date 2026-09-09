@@ -17,11 +17,20 @@ import { Drafts } from './Drafts';
 import { Today } from './Today';
 import { Profile } from './Profile';
 import { Published } from './Published';
+import { Comments } from './Comments';
 import { Avatar } from './PostCard';
 
 export type AppConfig = Config;
 
-type Tab = 'today' | 'compose' | 'carousel' | 'drafts' | 'connections' | 'published' | 'queue';
+type Tab =
+  | 'today'
+  | 'compose'
+  | 'carousel'
+  | 'comments'
+  | 'drafts'
+  | 'connections'
+  | 'published'
+  | 'queue';
 
 const BAND_LABEL: Record<AccountState['acceptance']['band'], string> = {
   unrated: 'not enough data yet',
@@ -196,7 +205,8 @@ export function App(): JSX.Element {
   // work the user starts; "Machinery" is the parts that run themselves and are
   // only opened when something looks wrong.
   const NAV: { group: string | null; items: [Tab, string][] }[] = [
-    { group: 'Needs you', items: [['drafts', 'Review'], ['connections', 'People']] },
+    { group: 'Engagement', items: [['comments', 'Comments'], ['connections', 'People']] },
+    { group: 'Needs you', items: [['drafts', 'Review']] },
     // Unlabelled: two rows do not need a heading to explain them, and a
     // heading per item is how a five-link sidebar starts feeling like a CRM.
     { group: null, items: [['carousel', 'Carousel'], ['published', 'Your posts'], ['queue', 'Scheduled']] },
@@ -337,6 +347,16 @@ export function App(): JSX.Element {
       )}
 
       {tab === 'carousel' && <Carousel />}
+
+      {tab === 'comments' && account && config && (
+        <Comments
+          account={account}
+          config={config}
+          keywords={keywords}
+          onChanged={() => void refresh()}
+          onGo={setTab}
+        />
+      )}
 
       {tab === 'published' && account && (
         <Published account={account} onChanged={() => void refresh()} />

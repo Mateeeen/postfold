@@ -105,6 +105,12 @@ interface UnipileAccountResponse {
 }
 
 interface UnipileSearchItem {
+  attachments?: {
+    type?: string;
+    url?: string;
+    unavailable?: boolean;
+    size?: { width?: number; height?: number };
+  }[];
   type?: string;
   id?: string;
   social_id?: string;
@@ -586,6 +592,17 @@ export class UnipileProvider implements SocialProvider {
         postUrl: item.share_url ?? `https://www.linkedin.com/feed/update/${urn}/`,
         authorPublicIdentifier: a.public_identifier ?? null,
         authorAvatarUrl: a.profile_picture_url ?? null,
+        attachments: (item.attachments ?? [])
+          .filter((at) => typeof at.url === 'string' && at.url !== '' && !at.unavailable)
+          .slice(0, 4)
+          .map((at) => ({
+            type: at.type === 'img' ? ('img' as const)
+              : at.type === 'video' ? ('video' as const)
+              : ('other' as const),
+            url: at.url as string,
+            width: at.size?.width ?? null,
+            height: at.size?.height ?? null,
+          })),
       });
     }
     return out;

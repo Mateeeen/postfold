@@ -94,6 +94,7 @@ draftsRouter.get(
                 : null,
               authorAvatarUrl: d.sourcePost.authorAvatarUrl,
               postedAt: d.sourcePost.postedAt ? d.sourcePost.postedAt.toISOString() : null,
+              attachments: d.sourcePost.attachments,
             }
           : null,
       })),
@@ -260,6 +261,7 @@ draftsRouter.get(
         comments: p.comments,
         postedAt: p.postedAt ? p.postedAt.toISOString() : null,
         postUrl: p.postUrl ?? `https://www.linkedin.com/feed/update/${p.urn}/`,
+        attachments: p.attachments,
       })),
     });
   }),

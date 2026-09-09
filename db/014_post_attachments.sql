@@ -1,0 +1,12 @@
+-- Images and video on a discovered post.
+--
+-- A post rendered without its picture is not the post. Half the judgement
+-- about whether a reply is worth making comes from what the thing actually
+-- looks like in the feed, and the text alone routinely reads as a non-sequitur
+-- when the point was carried by an image.
+--
+-- JSON rather than a table: these are display-only, always read as a whole
+-- with their post, and never queried across. Media URLs are signed and expire,
+-- so they are refreshed on every sighting and degrade to no image rather than
+-- to a broken one.
+ALTER TABLE discovered_posts ADD COLUMN attachments TEXT;

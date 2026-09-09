@@ -114,6 +114,7 @@ function DraftItem({
           reactions={draft.sourcePost.reactions}
           comments={draft.sourcePost.comments}
           postUrl={draft.sourcePost.postUrl}
+          attachments={draft.sourcePost.attachments}
           foldCharLimit={foldCharLimit}
           footer={
             <CommentBlock who={me}>

@@ -14,6 +14,7 @@
  */
 
 import { useState } from 'react';
+import type { PostAttachment } from './api';
 
 export interface PostIdentity {
   name: string;
@@ -35,6 +36,8 @@ interface Props {
   draft?: boolean;
   /** Data URI. Rendered edge to edge, the way the feed shows an attachment. */
   imageUrl?: string | null;
+  /** Media the post itself carries. Often the whole point of the post. */
+  attachments?: PostAttachment[];
   footer?: React.ReactNode;
 }
 
@@ -105,6 +108,7 @@ export function PostCard({
   foldCharLimit,
   draft = false,
   imageUrl,
+  attachments,
   footer,
 }: Props): JSX.Element {
   const [expanded, setExpanded] = useState(false);
@@ -155,6 +159,30 @@ export function PostCard({
       {imageUrl && (
         <div className="li-image">
           <img src={imageUrl} alt="" />
+        </div>
+      )}
+
+      {/* The post's own media. Text alone routinely reads as a non-sequitur
+          when the point was carried by the picture. Media URLs are signed and
+          expire, so a lapsed one collapses to nothing rather than to a broken
+          image icon. */}
+      {(attachments ?? []).length > 0 && (
+        <div className={`li-media n${Math.min((attachments ?? []).length, 4)}`}>
+          {(attachments ?? []).slice(0, 4).map((a) =>
+            a.type === 'video' ? (
+              <video key={a.url} src={a.url} controls preload="metadata" />
+            ) : (
+              <img
+                key={a.url}
+                src={a.url}
+                alt=""
+                loading="lazy"
+                onError={(e) => {
+                  (e.currentTarget as HTMLImageElement).style.display = 'none';
+                }}
+              />
+            ),
+          )}
         </div>
       )}
 

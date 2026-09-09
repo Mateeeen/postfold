@@ -185,6 +185,7 @@ export class FakeProvider implements SocialProvider {
         postUrl: 'https://www.linkedin.com/feed/update/urn:li:activity:fake/',
         authorPublicIdentifier: 'example-robin',
         authorAvatarUrl: null,
+        attachments: [],
       },
     ];
   }

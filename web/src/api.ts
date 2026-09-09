@@ -175,6 +175,7 @@ export interface DraftSourcePost {
   authorUrl: string | null;
   authorAvatarUrl: string | null;
   postedAt: string | null;
+  attachments: PostAttachment[];
 }
 
 /** A post someone else wrote, found by keyword. The engage feed. */
@@ -191,9 +192,17 @@ export interface FeedPost {
   comments: number;
   postedAt: string | null;
   postUrl: string;
+  attachments: PostAttachment[];
 }
 
 /** One of the account owner's own posts, as the platform reports it. */
+export interface PostAttachment {
+  type: 'img' | 'video' | 'other';
+  url: string;
+  width: number | null;
+  height: number | null;
+}
+
 export interface PublishedPost {
   urn: string;
   text: string;

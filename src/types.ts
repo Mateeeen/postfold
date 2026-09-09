@@ -304,6 +304,14 @@ export interface Draft {
   decidedBy: 'user' | 'timer' | null;
 }
 
+/** Media on a post. Display only; the URL is signed and expires. */
+export interface PostAttachment {
+  type: 'img' | 'video' | 'other';
+  url: string;
+  width: number | null;
+  height: number | null;
+}
+
 /** Somebody else's post, found by keyword search. */
 export interface DiscoveredPost {
   id: string;
@@ -322,6 +330,7 @@ export interface DiscoveredPost {
   postUrl: string | null;
   authorPublicIdentifier: string | null;
   authorAvatarUrl: string | null;
+  attachments: PostAttachment[];
 }
 
 export interface Keyword {

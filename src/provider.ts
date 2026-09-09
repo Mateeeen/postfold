@@ -10,12 +10,7 @@
  * DB-free, vendor-free. Adapters live in src/providers/.
  */
 
-import type {
-  AccountStatus,
-  Engagement,
-  FailureClass,
-  Person,
-} from './types.js';
+import type { AccountStatus, Engagement, FailureClass, Person, PostAttachment } from './types.js';
 
 export interface PublishPostInput {
   providerAccountId: string;
@@ -86,6 +81,7 @@ export interface FoundPost {
   authorPublicIdentifier: string | null;
   /** Signed and expiring; display only. */
   authorAvatarUrl: string | null;
+  attachments: PostAttachment[];
 }
 
 /** An existing comment on someone else's post. */

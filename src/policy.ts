@@ -815,7 +815,15 @@ export function outcomeForFailure(
         retry: false,
         accountStatus: 'disconnected',
         disableSending: true,
-        pausedReason: 'The LinkedIn session expired. Reconnect the account to resume.',
+        // Two different failures arrive here wearing the same 401: the
+        // LinkedIn session dying, and the API key this deployment uses being
+        // rejected. Naming only the first sent the user to reconnect LinkedIn
+        // when LinkedIn was fine - the wrong fix, several times over. Until
+        // the two can be told apart, say both.
+        pausedReason:
+          'Sending stopped: the provider rejected our credentials. Either the ' +
+          'LinkedIn session expired, or this deployment\'s API key is no longer ' +
+          'valid. Check the key first, then reconnect the account.',
       };
 
     case 'invalid':

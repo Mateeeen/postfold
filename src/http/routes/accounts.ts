@@ -8,6 +8,8 @@ import {
 } from '../../db/accounts.js';
 import { getAccountOwner, listConnectableAccounts } from '../../providers/index.js';
 import { refreshOwnerProfile } from '../../profile.js';
+import { ingestOwnWriting } from '../../ingest.js';
+import { readiness } from '../../readiness.js';
 import { getAccountState } from '../../state.js';
 import { ownsAccount, resolveAccountId } from '../auth.js';
 import { asyncHandler, badRequest, notFound, param, refused } from '../util.js';
@@ -204,6 +206,33 @@ accountsRouter.post(
     }
 
     res.json(await getAccountState(id));
+  }),
+);
+
+/**
+ * How close this account is to autopilot, and what is missing.
+ *
+ * Also the place the three tracked numbers surface: evidence documents,
+ * grounded-draft rate, and fills split by source.
+ */
+accountsRouter.get(
+  '/api/accounts/:id/readiness',
+  asyncHandler(async (req, res) => {
+    const id = param(req, 'id');
+    if (!(await ownsAccount(req, id))) return notFound(res, 'No such account');
+    res.json(await readiness(id));
+  }),
+);
+
+/** Pull their own posts and comments into the voice bank now. */
+accountsRouter.post(
+  '/api/accounts/:id/ingest',
+  asyncHandler(async (req, res) => {
+    const id = param(req, 'id');
+    if (!(await ownsAccount(req, id))) return notFound(res, 'No such account');
+
+    const result = await ingestOwnWriting(id);
+    res.json({ ...result, readiness: await readiness(id) });
   }),
 );
 

@@ -115,6 +115,15 @@ export const LIMITS = {
    */
   AUTO_PUBLISH_ENABLED: false,
 
+  /**
+   * Citable documents needed before autopilot is reachable at all.
+   *
+   * Not a safety limit - a feasibility one. With an empty bank nothing is ever
+   * grounded, so autopilot would never fire and would read as broken rather
+   * than as unqualified.
+   */
+  AUTOPILOT_MIN_EVIDENCE_DOCS: 5,
+
   /* --- Quality gate -------------------------------------------------- *
    * Provisional until the corpus distribution says otherwise. Every number
    * here is a guess calibrated against known-good human posts, not against

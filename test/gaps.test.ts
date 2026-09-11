@@ -6,6 +6,8 @@
  */
 
 import { describe, expect, it } from 'vitest';
+import { addDocument, evidenceMaterial, trustFor, voiceSamples } from '../src/db/documents.js';
+import { fixture } from './helpers.js';
 import {
   appearsIn,
   applyRetrieved,
@@ -19,6 +21,11 @@ import {
   proveNumerals,
   renderGaps,
 } from '../src/gaps.js';
+
+/** Something the user pasted. Real words, not their words. */
+const PASTED =
+  'A recent industry report found that 47% of enterprises now run AI code review '
+  + 'in production, up from single digits two years ago.';
 
 const MATERIAL =
   'Production App vibecoded. AI-assisted coding can make an app look 100% complete ' +
@@ -172,5 +179,64 @@ describe('appearsIn', () => {
 
   it('tolerates retyped punctuation on a longer span', () => {
     expect(appearsIn('“AI-assisted coding can make an app look”', MATERIAL)).toBe(true);
+  });
+});
+
+/* ================================================================== *
+ * The trust boundary
+ *
+ * Retrieved material is what lets a specific through the provenance scan,
+ * so what counts as "theirs" is a security question, not a storage one.
+ * ================================================================== */
+
+describe('trust levels', () => {
+  it('classifies sources by whether authorship is verifiable', () => {
+    expect(trustFor('linkedin_post')).toBe('evidence');
+    expect(trustFor('linkedin_comment')).toBe('evidence');
+    expect(trustFor('commit')).toBe('evidence');
+    // The whole point: pasting an article must not make it quotable as yours.
+    expect(trustFor('note')).toBe('voice');
+    expect(trustFor('link')).toBe('voice');
+  });
+
+  it('keeps pasted text out of citable material', async () => {
+    const f = await fixture();
+    try {
+      await addDocument(
+        { accountId: f.account.id, source: 'note', text: PASTED, externalId: 'n1' },
+        f.db,
+      );
+      await addDocument(
+        { accountId: f.account.id, source: 'linkedin_post', text: MATERIAL, externalId: 'p1' },
+        f.db,
+      );
+
+      const citable = await evidenceMaterial(f.account.id, 40, f.db);
+      expect(citable).toContain('three weeks');
+      expect(citable).not.toContain('47% of enterprises');
+
+      // Style may draw on both — tone is not a truth claim.
+      const style = await voiceSamples(f.account.id, 5, f.db);
+      expect(style.join(' ')).toContain('47% of enterprises');
+    } finally {
+      f.db.close();
+    }
+  });
+
+  it('will not let a pasted statistic prove a numeral', async () => {
+    const f = await fixture();
+    try {
+      await addDocument(
+        { accountId: f.account.id, source: 'note', text: PASTED, externalId: 'n1' },
+        f.db,
+      );
+      const citable = await evidenceMaterial(f.account.id, 40, f.db);
+
+      // The number is right there in the pasted article, and still gets gapped.
+      const { converted } = proveNumerals('Adoption sits at 47% of enterprises.', citable);
+      expect(converted).toContain('47%');
+    } finally {
+      f.db.close();
+    }
   });
 });

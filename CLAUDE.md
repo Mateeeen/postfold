@@ -44,6 +44,25 @@ specific, hard-to-reverse harm to a real person's LinkedIn account.
    again in the worker immediately before execution. Between the two, a user
    may have paused, or a checkpoint webhook may have landed.
 
+8. **Anything the model must reproduce verbatim is ASCII.** The gap delimiter
+   was `⟨angle brackets⟩` once. The model mangled the closing one into
+   `⟨timeframe�>`, nothing parsed, the draft reported zero gaps, and text
+   with visible broken markers became eligible to publish. A character that
+   has to survive a model, a JSON round-trip and an encoding is not the place
+   to be clever.
+
+9. **Every parse failure in the gap layer fails closed.** Unparsed residue
+   counts as an open gap; an open gap can never publish itself. The failure
+   mode of the alternative is silent and outward-facing.
+
+10. **Only verifiable authorship counts as evidence.** Material is stored at
+    one of two trust levels. *Voice* — pasted text, saved links, notes — shapes
+    style and nothing else. *Evidence* — their own posts, their own comments,
+    their own commits — is the only thing retrieval fills and the numeral
+    provenance scan may cite. Without the split, pasting an article to
+    bootstrap faster makes that article citable as the user's own claim, and
+    the fabrication guarantee degrades without anyone noticing.
+
 ## Things that look wrong and are not
 
 - **better-sqlite3 is synchronous, but every DB function is `async`.** The

@@ -43,6 +43,7 @@ import { getProvider } from '../providers/index.js';
 import { syncEngagersForPost } from '../engagers.js';
 import { approveDraft, draftComments, draftDailyPost, syncTrends } from '../trends.js';
 import { refreshOwnerProfile } from '../profile.js';
+import { ingestOwnWriting } from '../ingest.js';
 import { pollAcceptance, syncReplies } from '../replies.js';
 import { dueForAutoApproval, getDraft, setDraftStatus } from '../db/drafts.js';
 import type { Action, FailureClass } from '../types.js';
@@ -218,6 +219,17 @@ async function execute(
         await refreshOwnerProfile(action.accountId, db);
       } catch (err) {
         console.warn('[worker] profile refresh failed', err);
+      }
+
+      // Top up the voice bank from their own writing. Cheap, idempotent, and
+      // the leading indicator for whether autopilot will ever be reachable.
+      try {
+        const ing = await ingestOwnWriting(action.accountId, provider, db);
+        if (ing.posts + ing.comments > 0) {
+          console.log(`[ingest] +${ing.posts} posts +${ing.comments} comments (evidence: ${ing.evidenceTotal})`);
+        }
+      } catch (err) {
+        console.warn('[worker] voice bank ingestion failed', err);
       }
 
       // The day's post rides the same sync, for the same reason drafting does:

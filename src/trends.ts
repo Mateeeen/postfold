@@ -12,6 +12,7 @@
  * for connection requests, which can never be auto-approved.
  */
 
+import { evidenceMaterial, voiceSamples } from './db/documents.js';
 import { applyRetrieved, hasOpenGaps, parseGaps, proveNumerals } from './gaps.js';
 import { getAccount } from './db/accounts.js';
 import { createPost, listPosts } from './db/content.js';
@@ -314,7 +315,10 @@ export async function draftPost(
   // The drafter emitted a frame with holes. Try to fill them from what this
   // person has actually written; anything the material cannot answer stays
   // open, and an open gap is what stops the post publishing itself.
-  const material = author.recentPosts.join('\n\n');
+  // Citable material only. author.recentPosts is style, and may contain
+  // pasted text the user never wrote; quoting that back as their own claim is
+  // exactly the failure the trust split exists to prevent.
+  const material = await evidenceMaterial(input.accountId, undefined, db);
 
   // Any numeral the model asserted in prose that their own material cannot
   // account for becomes a gap. The remedy for an unsourced specific is to ask

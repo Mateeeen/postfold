@@ -1,0 +1,11 @@
+-- Withdrawal as a first-class action.
+--
+-- An invite nobody answers is not free: a large unanswered pile is its own
+-- negative signal, and LinkedIn expires them at roughly 21 days anyway.
+-- Withdrawing at 14 reads as housekeeping rather than a purge.
+--
+-- withdraw_queued_at is the idempotency key, and it lives on the INVITE rather
+-- than being derived from the run. Reconciliation runs twice a day; keyed on
+-- anything else, a 15-day-old invite would queue a withdrawal on every run
+-- until one of them landed.
+ALTER TABLE invites ADD COLUMN withdraw_queued_at TEXT;

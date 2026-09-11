@@ -176,6 +176,22 @@ async function execute(
       return;
     }
 
+    case 'withdraw_invite': {
+      await provider.withdrawInvite({
+        providerAccountId: account.providerAccountId,
+        providerInviteId: payload.providerInviteId,
+      });
+
+      // 'withdrawn', never 'expired'. Same arithmetic - both are resolved and
+      // not accepted - but expired is LinkedIn giving up on the invitation and
+      // withdrawn is us taking it back. Collapsing them would make our own
+      // housekeeping look like the platform losing patience with this account.
+      db.prepare(
+        `UPDATE invites SET status = 'withdrawn', last_checked_at = ? WHERE id = ?`,
+      ).run(nowIso(), payload.inviteId);
+      return;
+    }
+
     case 'poll_acceptance': {
       const r = await pollAcceptance(
         { accountId: action.accountId, inviteIds: payload.inviteIds },

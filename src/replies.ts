@@ -6,6 +6,7 @@
  * polling only records a fact we were already going to be told by webhook.
  */
 
+import { enqueue } from './queue/scheduler.js';
 import { getAccount, getAcceptance } from './db/accounts.js';
 import { markInviteAccepted, upsertPerson } from './db/content.js';
 import type { Db } from './db/index.js';
@@ -196,6 +197,8 @@ export interface PollAcceptanceResult {
   accepted: number;
   /** Resolved as refused. Tracked apart from withdrawals on purpose. */
   declined: number;
+  /** Old invites queued to be taken back. */
+  withdrawalsQueued: number;
   gaveUp: number;
 }
 
@@ -203,6 +206,8 @@ interface PendingInviteRow {
   id: string;
   person_id: string;
   provider_person_id: string;
+  provider_invite_id: string | null;
+  withdraw_queued_at: string | null;
   sent_at: string;
 }
 
@@ -229,7 +234,8 @@ export async function pollAcceptance(
 
   const rows = db
     .prepare(
-      `SELECT i.id, i.person_id, p.provider_person_id, i.sent_at
+      `SELECT i.id, i.person_id, p.provider_person_id, i.sent_at,
+              i.provider_invite_id, i.withdraw_queued_at
          FROM invites i
          JOIN people p ON p.id = i.person_id
         WHERE i.account_id = ? AND i.status = 'sent'
@@ -244,7 +250,8 @@ export async function pollAcceptance(
       : rows;
 
   const result: PollAcceptanceResult = { checked: 0, accepted: 0,
-    declined: 0, gaveUp: 0 };
+    declined: 0,
+    withdrawalsQueued: 0, gaveUp: 0 };
   if (targets.length === 0) return result;
 
   // ONE call tells us everything still outstanding, rather than a profile
@@ -272,6 +279,42 @@ export async function pollAcceptance(
       // Still outstanding. Give up on one nobody has acted on for weeks —
       // marking it expired rather than deleting keeps it in the denominator,
       // because forgetting it would flatter the rate and raise the cap.
+      // Old enough to take back. Queued through the same enqueue as
+      // everything else, so it is paced and capped rather than fired in a
+      // burst - clearing a pile at once looks exactly like sending one.
+      //
+      // The idempotency key is withdraw_queued_at on the INVITE, not anything
+      // derived from this run. Reconciliation runs twice a day; keyed on the
+      // run, a fifteen-day-old invite would queue a fresh withdrawal every
+      // time until one of them happened to land.
+      if (
+        !row.withdraw_queued_at &&
+        row.provider_invite_id &&
+        now - sentAt > LIMITS.WITHDRAW_AFTER_MS
+      ) {
+        const queued = await enqueue(
+          {
+            accountId: input.accountId,
+            payload: {
+              kind: 'withdraw_invite',
+              inviteId: row.id,
+              personId: row.person_id,
+              providerInviteId: row.provider_invite_id,
+            },
+            dedupeKey: `withdraw:${row.id}`,
+          },
+          db,
+        );
+        if (queued.ok) {
+          db.prepare('UPDATE invites SET withdraw_queued_at = ? WHERE id = ?').run(
+            nowIso(),
+            row.id,
+          );
+          result.withdrawalsQueued++;
+        }
+        continue;
+      }
+
       if (now - sentAt > LIMITS.INVITE_GIVE_UP_AFTER_MS) {
         db.prepare(
           `UPDATE invites SET status = 'expired', last_checked_at = ? WHERE id = ?`,

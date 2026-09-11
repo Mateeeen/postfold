@@ -163,6 +163,13 @@ export class FakeProvider implements SocialProvider {
   /** Invites the fake platform still considers pending. */
   pendingInvitations: string[] = [];
 
+  async withdrawInvite(input: {
+    providerAccountId: string;
+    providerInviteId: string;
+  }): Promise<void> {
+    this.record('withdrawInvite', input);
+  }
+
   async listSentInvitations(input: {
     providerAccountId: string;
     limit: number;

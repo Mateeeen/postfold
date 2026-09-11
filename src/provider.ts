@@ -219,6 +219,18 @@ export interface SocialProvider {
   postComment(input: PostCommentInput): Promise<PostCommentResult>;
 
   /**
+   * Take back a pending invitation.
+   *
+   * Keyed on the provider's own invitation id, which is NOT the id returned
+   * when the invite was sent - it comes from the sent-invitations list, which
+   * is the only reason reconciliation captures it.
+   */
+  withdrawInvite(input: {
+    providerAccountId: string;
+    providerInviteId: string;
+  }): Promise<void>;
+
+  /**
    * Invitations we have sent that are still pending.
    *
    * One call answers "which invites are still outstanding", where the

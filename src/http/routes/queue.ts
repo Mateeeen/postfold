@@ -58,6 +58,12 @@ async function describe(action: Action): Promise<Record<string, unknown>> {
     };
   }
 
+  if (action.payload.kind === 'withdraw_invite') {
+    // "Taking back" rather than "withdrawing": the user is being told what
+    // happens, not shown the name of our action kind.
+    return { ...base, label: 'Take back an unanswered invite' };
+  }
+
   // Exhaustiveness check. A new ActionKind now fails to compile here instead
   // of silently inheriting whatever label happened to be last in the chain —
   // which is exactly how sync_trends ended up displayed as "Pull engagers".

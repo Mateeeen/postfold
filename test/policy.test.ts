@@ -663,3 +663,20 @@ describe('budget: note allowance', () => {
     expect(r.notesRemaining).toBe(0);
   });
 });
+
+describe('budget: withdrawals are paced like everything else', () => {
+  it('caps withdrawals at the daily limit', () => {
+    const r = budget(baseBudgetInput({ kind: 'withdraw_invite' }));
+    expect(r.cap).toBe(LIMITS.DAILY_WITHDRAW_CAP);
+  });
+
+  it('refuses once the weekly limit is reached', () => {
+    // Clearing a pile of outstanding invitations in one burst is the same
+    // shape as sending a pile of them.
+    const r = budget(
+      baseBudgetInput({ kind: 'withdraw_invite', sentLast7d: LIMITS.WEEKLY_WITHDRAW_CAP }),
+    );
+    expect(r.allowed).toBe(false);
+    expect(r.reason).toMatch(/taking back invitations/i);
+  });
+});

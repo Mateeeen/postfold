@@ -170,7 +170,9 @@ export type ActionKind =
   /** Read replies to comments we left. Read-only. */
   | 'sync_replies'
   /** Check whether sent invites have been accepted. Read-only. */
-  | 'poll_acceptance';
+  | 'poll_acceptance'
+  /** Take back an invitation nobody answered. */
+  | 'withdraw_invite';
 
 export type ActionStatus =
   | 'pending'
@@ -184,6 +186,13 @@ export interface CreatePostPayload {
   text: string;
   /** Data URI, carried on the action so the image survives the queue wait. */
   imageUrl?: string | null;
+}
+
+export interface WithdrawInvitePayload {
+  inviteId: string;
+  personId: string;
+  /** The provider's own id for the invitation, which is what it withdraws by. */
+  providerInviteId: string;
 }
 
 export interface SendInvitePayload {
@@ -223,6 +232,7 @@ export interface PollAcceptancePayload {
 export type ActionPayload =
   | ({ kind: 'create_post' } & CreatePostPayload)
   | ({ kind: 'send_invite' } & SendInvitePayload)
+  | ({ kind: 'withdraw_invite' } & WithdrawInvitePayload)
   | ({ kind: 'sync_engagers' } & SyncEngagersPayload)
   | ({ kind: 'post_comment' } & PostCommentPayload)
   | ({ kind: 'sync_trends' } & SyncTrendsPayload)

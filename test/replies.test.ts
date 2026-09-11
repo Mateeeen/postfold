@@ -14,6 +14,7 @@ import { listSuggestions, recordInviteSent, upsertPerson } from '../src/db/conte
 import { draftReplyNote, pollAcceptance, scoreReply, syncReplies } from '../src/replies.js';
 import { acceptanceBand, LIMITS } from '../src/policy.js';
 import { FakeProvider } from '../src/providers/fake.js';
+import { tick } from '../src/queue/worker.js';
 import { fixture } from './helpers.js';
 import type { Fixture } from './helpers.js';
 
@@ -248,6 +249,11 @@ describe('pollAcceptance', () => {
     // stale rather than resolved.
     provider.pendingInvitations = ['p-stale'];
 
+    // No provider invitation id, so it cannot be taken back - this is the
+    // path that still reaches the give-up branch. An invite we CAN withdraw
+    // is withdrawn at 14 days and never gets this old.
+    f.db.prepare('UPDATE invites SET provider_invite_id = NULL').run();
+
     const r = await pollAcceptance({ accountId: f.account.id }, provider, f.db);
     expect(r.gaveUp).toBe(1);
 
@@ -376,5 +382,110 @@ describe('reconciliation resolves nothing it cannot prove', () => {
     } finally {
       f.db.close();
     }
+  });
+});
+
+/* ================================================================== *
+ * Withdrawals
+ *
+ * Reconciliation runs twice a day. The whole risk here is queueing one
+ * withdrawal per run instead of one per invite.
+ * ================================================================== */
+
+describe('withdrawing invites nobody answered', () => {
+  async function staleInvite(f: Fixture, who: string, ageMs: number): Promise<string> {
+    const person = await upsertPerson(
+      f.account.id,
+      { providerPersonId: who, name: 'Invitee', headline: null, profileUrl: null, avatarUrl: null },
+      f.db,
+    );
+    f.db
+      .prepare(
+        `INSERT INTO actions (id, account_id, kind, status, payload, scheduled_at,
+           dedupe_key, created_at, updated_at)
+         VALUES (?, ?, 'send_invite', 'done', '{}', datetime('now'), ?, datetime('now'), datetime('now'))`,
+      )
+      .run(`act-${who}`, f.account.id, `k-${who}`);
+    await recordInviteSent(
+      {
+        accountId: f.account.id,
+        personId: person.id,
+        actionId: `act-${who}`,
+        providerInviteId: `inv-${who}`,
+        sentAt: new Date(Date.now() - ageMs),
+        withNote: true,
+      },
+      f.db,
+    );
+    const row = f.db
+      .prepare('SELECT id FROM invites WHERE account_id = ? AND person_id = ?')
+      .get(f.account.id, person.id) as { id: string };
+    return row.id;
+  }
+
+  const withdrawals = (f: Fixture): number =>
+    (
+      f.db
+        .prepare("SELECT COUNT(*) AS n FROM actions WHERE kind = 'withdraw_invite'")
+        .get() as { n: number }
+    ).n;
+
+  it('queues exactly one withdrawal per invite, not one per run', async () => {
+    // The bug this exists to prevent: reconciliation runs twice a day, and a
+    // fifteen-day-old invite queues a fresh withdrawal every single time until
+    // one of them lands. Three runs, one withdrawal.
+    const f = (current = await fixture());
+    const inviteId = await staleInvite(f, 'p-stale', LIMITS.WITHDRAW_AFTER_MS + 86_400_000);
+
+    const provider = new FakeProvider({ ...silent, connectedTo: [] });
+    provider.pendingInvitations = ['p-stale'];
+
+    for (let run = 0; run < 3; run++) {
+      await pollAcceptance({ accountId: f.account.id }, provider, f.db);
+    }
+
+    expect(withdrawals(f)).toBe(1);
+
+    const row = f.db
+      .prepare('SELECT withdraw_queued_at FROM invites WHERE id = ?')
+      .get(inviteId) as { withdraw_queued_at: string | null };
+    expect(row.withdraw_queued_at).not.toBeNull();
+  });
+
+  it('leaves an invite alone before the fourteenth day', async () => {
+    const f = (current = await fixture());
+    await staleInvite(f, 'p-fresh', LIMITS.WITHDRAW_AFTER_MS - 86_400_000);
+
+    const provider = new FakeProvider({ ...silent, connectedTo: [] });
+    provider.pendingInvitations = ['p-fresh'];
+
+    await pollAcceptance({ accountId: f.account.id }, provider, f.db);
+    expect(withdrawals(f)).toBe(0);
+  });
+
+  it('resolves the invite to withdrawn, not expired, once it executes', async () => {
+    // Same arithmetic, different diagnosis: expired is LinkedIn giving up on
+    // the invitation, withdrawn is us taking it back.
+    const f = (current = await fixture());
+    const inviteId = await staleInvite(f, 'p-old', LIMITS.WITHDRAW_AFTER_MS + 86_400_000);
+
+    const provider = new FakeProvider({ ...silent, connectedTo: [] });
+    provider.pendingInvitations = ['p-old'];
+    await pollAcceptance({ accountId: f.account.id }, provider, f.db);
+
+    const action = f.db
+      .prepare("SELECT id FROM actions WHERE kind = 'withdraw_invite'")
+      .get() as { id: string };
+    f.db
+      .prepare("UPDATE actions SET scheduled_at = datetime('now','-1 minute') WHERE id = ?")
+      .run(action.id);
+
+    await tick(provider, new Date(), f.db);
+
+    const row = f.db
+      .prepare('SELECT status FROM invites WHERE id = ?')
+      .get(inviteId) as { status: string };
+    expect(row.status).toBe('withdrawn');
+    expect(provider.calls.some((c) => c.method === 'withdrawInvite')).toBe(true);
   });
 });

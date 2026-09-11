@@ -791,6 +791,16 @@ export class UnipileProvider implements SocialProvider {
     }
   }
 
+  async withdrawInvite(input: {
+    providerAccountId: string;
+    providerInviteId: string;
+  }): Promise<void> {
+    await this.request<unknown>(
+      `/api/v1/users/invite/sent/${encodeURIComponent(input.providerInviteId)}`,
+      { method: 'DELETE', query: { account_id: input.providerAccountId } },
+    );
+  }
+
   async listSentInvitations(input: {
     providerAccountId: string;
     limit: number;

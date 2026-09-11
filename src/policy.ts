@@ -229,6 +229,23 @@ export const LIMITS = {
    * pending is excluded from it.
    */
   MAX_PENDING_INVITES: 120,
+
+  /**
+   * Withdrawals per day and per week.
+   *
+   * Paced like everything else, and never in bulk: clearing a pile of
+   * outstanding invitations in one burst is the same shape as sending a pile
+   * of them, and reads the same way to whatever is watching.
+   */
+  DAILY_WITHDRAW_CAP: 10,
+  WEEKLY_WITHDRAW_CAP: 60,
+  /**
+   * How long an invite waits before it is taken back.
+   *
+   * Inside LinkedIn's own ~21-day expiry on purpose, so a withdrawal reads as
+   * tidying rather than as a purge triggered by something going wrong.
+   */
+  WITHDRAW_AFTER_MS: 14 * 24 * 60 * 60 * 1000,
   ACCEPTANCE_LOOKBACK_DAYS: 14,
 
   MAX_ATTEMPTS: 5,
@@ -455,6 +472,8 @@ function baseCapFor(kind: ActionKind, day: number): number {
       return LIMITS.DAILY_REPLY_SYNC_CAP;
     case 'poll_acceptance':
       return LIMITS.DAILY_ACCEPTANCE_POLL_CAP;
+    case 'withdraw_invite':
+      return LIMITS.DAILY_WITHDRAW_CAP;
   }
 }
 
@@ -489,6 +508,8 @@ export function budget(input: BudgetInput): BudgetResult {
 
   const cap = isInvite
     ? Math.min(withOverride, LIMITS.HARD_DAILY_INVITE_CAP)
+    : input.kind === 'withdraw_invite'
+      ? Math.min(withOverride, LIMITS.DAILY_WITHDRAW_CAP)
     : isComment
       ? Math.min(withOverride, LIMITS.HARD_DAILY_COMMENT_CAP)
       : withOverride;
@@ -568,6 +589,15 @@ export function budget(input: BudgetInput): BudgetResult {
       'Your connection acceptance rate has fallen below 15%. Invites are on hold — a low acceptance rate is what gets accounts restricted. Send fewer, more relevant invites.',
     );
   }
+  const isWithdraw = input.kind === 'withdraw_invite';
+  if (isWithdraw && input.sentLast7d + input.pendingSameKind >= LIMITS.WEEKLY_WITHDRAW_CAP) {
+    return result(
+      false,
+      `Weekly limit on taking back invitations reached (${LIMITS.WEEKLY_WITHDRAW_CAP}). `
+        + 'The rest will be taken back over the coming days.',
+    );
+  }
+
   if (isInvite && input.sentLast7d + input.pendingSameKind >= LIMITS.WEEKLY_INVITE_CAP) {
     return result(
       false,

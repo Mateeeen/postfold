@@ -148,10 +148,10 @@ function DraftItem({
       )}
 
       <div className="draft-why-row">
-        <span className="meta">
-          {draft.rationale}
-          {draft.model ? ` · ${draft.model}` : ''}
-        </span>
+        {/* The model name stays out of the UI. It is recorded on the row for
+            tracing a bad batch, but naming it on the content is exactly the
+            "this was generated" signal the product should never volunteer. */}
+        <span className="meta">{draft.rationale}</span>
       </div>
 
       {blocked ? (

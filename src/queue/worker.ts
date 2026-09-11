@@ -399,7 +399,18 @@ export async function tick(
 export async function sweepAutoApprovals(
   now: Date = new Date(),
   db: Db = getDb(),
+  /**
+   * Overridable so the timer machinery stays under test while the switch is
+   * off. Production never passes it; deleting these tests to make the suite
+   * green would leave the feature unproven on the day it is switched back on.
+   */
+  enabled: boolean = LIMITS.AUTO_PUBLISH_ENABLED,
 ): Promise<{ approved: number; held: number }> {
+  // Belt and braces. Switching the flag off stops new deadlines being set, but
+  // rows written before it was switched off still carry one - and those are
+  // exactly the drafts written by the version that had no quality gate.
+  if (!enabled) return { approved: 0, held: 0 };
+
   const due = await dueForAutoApproval(now, db);
   let approved = 0;
   let held = 0;

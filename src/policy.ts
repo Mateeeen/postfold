@@ -100,6 +100,21 @@ export const LIMITS = {
    */
   AUTO_APPROVE_AFTER_MS: 24 * 60 * 60 * 1000,
 
+  /**
+   * Whether a draft may ever publish itself.
+   *
+   * OFF until a quality gate exists. The drafter has been observed inventing a
+   * first-person anecdote with fabricated numbers - a specific week, a specific
+   * line count - none of which happened. On a timer that reaches a real
+   * LinkedIn account under a real name, and nothing currently reads the text
+   * between the model writing it and the platform receiving it.
+   *
+   * Every other known defect here fails safe: a wrong acceptance rate stops
+   * sending, a dead credential stops sending. This one publishes. So it is off
+   * by default and turns back on when something checks the words first.
+   */
+  AUTO_PUBLISH_ENABLED: false,
+
   /** Never two sends closer together than this, at any budget. */
   MIN_GAP_MINUTES: 8,
   /** Never spread so thin that a day's budget cannot fit in the window. */
@@ -233,7 +248,8 @@ export function commentWarmupCap(day: number): number {
  * When a draft would publish itself, given when it was written. Pure, so the
  * UI can render the countdown without asking the server.
  */
-export function autoApproveAt(draftedAt: Date): Date {
+export function autoApproveAt(draftedAt: Date): Date | null {
+  if (!LIMITS.AUTO_PUBLISH_ENABLED) return null;
   return new Date(draftedAt.getTime() + LIMITS.AUTO_APPROVE_AFTER_MS);
 }
 

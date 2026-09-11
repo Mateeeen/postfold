@@ -125,10 +125,9 @@ describe('draftComments', () => {
     const row = f.db.prepare('SELECT auto_approve_at FROM drafts').get() as {
       auto_approve_at: string | null;
     };
-    expect(row.auto_approve_at).not.toBeNull();
-
-    const due = new Date(row.auto_approve_at as string).getTime() - Date.now();
-    expect(due).toBeGreaterThan(LIMITS.AUTO_APPROVE_AFTER_MS - 60_000);
+    // No deadline while auto-publish is off, whatever the caller asked for.
+    // The flag outranks the option: that is the point of it.
+    expect(row.auto_approve_at).toBeNull();
   });
 });
 
@@ -161,14 +160,14 @@ describe('sweepAutoApprovals', () => {
   it('does not fire before the deadline', async () => {
     const f = await seeded();
     const draft = await pendingComment(f, new Date(Date.now() + 86_400_000));
-    await sweepAutoApprovals(new Date(), f.db);
+    await sweepAutoApprovals(new Date(), f.db, true);
     expect((await getDraft(draft.id, f.db))?.status).toBe('pending');
   });
 
   it('queues the draft once the deadline passes', async () => {
     const f = await seeded();
     const draft = await pendingComment(f, new Date(Date.now() - 1000));
-    const r = await sweepAutoApprovals(new Date(), f.db);
+    const r = await sweepAutoApprovals(new Date(), f.db, true);
 
     expect(r.approved).toBe(1);
     const after = await getDraft(draft.id, f.db);
@@ -188,7 +187,7 @@ describe('sweepAutoApprovals', () => {
     );
     const draft = await pendingComment(f, new Date(Date.now() - 1000));
 
-    const r = await sweepAutoApprovals(new Date(), f.db);
+    const r = await sweepAutoApprovals(new Date(), f.db, true);
     expect(r.approved).toBe(0);
     expect(r.held).toBe(1);
     expect(await listPendingActions(f.account.id, f.db)).toHaveLength(0);
@@ -202,12 +201,12 @@ describe('sweepAutoApprovals', () => {
     await updateAccount(f.account.id, { sendingEnabled: false }, f.db);
     const draft = await pendingComment(f, new Date(Date.now() - 1000));
 
-    await sweepAutoApprovals(new Date(), f.db);
+    await sweepAutoApprovals(new Date(), f.db, true);
     const after = await getDraft(draft.id, f.db);
     expect(after?.status).toBe('pending');
     expect(after?.autoApproveAt).toBeNull();
 
-    const second = await sweepAutoApprovals(new Date(), f.db);
+    const second = await sweepAutoApprovals(new Date(), f.db, true);
     expect(second.approved + second.held).toBe(0);
   });
 });
@@ -412,6 +411,46 @@ describe('voice samples', () => {
  * the model had already written it.
  * ================================================================== */
 
+describe('auto-publish switch', () => {
+  it('writes no deadline while auto-publish is off', async () => {
+    // The flag is the product's only guarantee that nothing reaches LinkedIn
+    // unread. If drafting starts stamping deadlines again this fails first.
+    const f = await seeded();
+    await syncTrends({ accountId: f.account.id }, new FakeProvider(silent), f.db);
+
+    const draft = await draftDailyPost(
+      { accountId: f.account.id, options: AUTO },
+      new FakeLlm(silent),
+      f.db,
+    );
+
+    expect(LIMITS.AUTO_PUBLISH_ENABLED).toBe(false);
+    expect(draft?.autoApproveAt).toBeNull();
+  });
+
+  it('publishes nothing even when a row already carries a deadline', async () => {
+    // Drafts written before the flag was switched off still have one. The
+    // sweep must refuse them on the flag alone, not on their timestamps.
+    const f = await seeded();
+    const draft = await createDraft(
+      {
+        accountId: f.account.id,
+        kind: 'post',
+        text: 'Written by the version with no quality gate.',
+        rationale: 'test',
+        autoApproveAt: new Date(Date.now() - 60_000),
+      },
+      f.db,
+    );
+
+    // No override here on purpose: this asserts the production default.
+    const result = await sweepAutoApprovals(new Date(), f.db);
+
+    expect(result.approved).toBe(0);
+    expect((await getDraft(draft.id, f.db))?.status).toBe('pending');
+  });
+});
+
 describe('draftDailyPost', () => {
   it('is not starved by comment drafting having claimed every post', async () => {
     // draftPost used to read undraftedPosts(), the query for "what could we
@@ -440,7 +479,7 @@ describe('draftDailyPost', () => {
     );
     expect(draft).not.toBeNull();
     expect(draft?.kind).toBe('post');
-    expect(draft?.autoApproveAt).not.toBeNull();
+    expect(draft?.autoApproveAt).toBeNull();
   });
 
   it('writes nothing when today already has one', async () => {

@@ -1,0 +1,11 @@
+-- Stand down the timers already running.
+--
+-- Turning AUTO_PUBLISH_ENABLED off stops new deadlines being written and stops
+-- the sweep acting on old ones, but the rows still carry a timestamp — so the
+-- UI would keep counting down to a moment that never arrives. A countdown that
+-- does not fire is worse than none: it teaches the user the deadline is real,
+-- and the next one might be.
+--
+-- These are also the highest-risk drafts in the table: written by the version
+-- with nothing reading the text, and closest to going out.
+UPDATE drafts SET auto_approve_at = NULL WHERE status = 'pending';

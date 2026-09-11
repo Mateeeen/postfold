@@ -413,8 +413,6 @@ export interface BudgetInput {
   invitesWithNoteLast30d?: number;
   /** Invites awaiting an answer. Its own stop, separate from the rate. */
   pendingInvites?: number;
-  /** Whether the invite being considered carries a note. */
-  usesNote?: boolean;
 }
 
 export interface BudgetResult {

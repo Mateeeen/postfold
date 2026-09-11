@@ -146,7 +146,12 @@ export function fitsType(value: string, type: GapType): boolean {
     case 'quantity':
       return /\d/.test(v);
     case 'text':
-      return true;
+      // Absent is not the same as light. There is no type system here on
+      // purpose, but "unknown prompt accepts anything" would let a retrieved
+      // span that is obviously wrong in any sentence through. This is the
+      // floor, not a check: non-empty, not a paragraph, and not a gap marker
+      // that survived into the fill.
+      return v.length <= 120 && !/\[\[|\]\]|[⟨⟩]/u.test(v);
   }
 }
 
@@ -177,11 +182,26 @@ export function renderGaps(frame: string, gaps: Gap[]): string {
   });
 }
 
-export function hasOpenGaps(gaps: Gap[], frame?: string): boolean {
+/**
+ * Is this draft unfinished?
+ *
+ * `frame` is required, deliberately. It was optional, and omitting it skipped
+ * the residue check and returned the permissive answer - so a caller that
+ * forgot it would report "no open gaps" for text carrying broken markers. A
+ * test was already asserting that permissive answer. Requiring the argument
+ * forces every call site to decide rather than inherit.
+ */
+export function hasOpenGaps(gaps: Gap[], frame: string): boolean {
   if (gaps.some((g) => g.value === null)) return true;
   // Unparsed residue counts as open. Publishing text with stray brackets is
   // worse than holding a draft that turned out to be fine.
-  return frame !== undefined && hasGapResidue(frame);
+  if (hasGapResidue(frame)) return true;
+  // The gap list must account for every marker in the text it belongs to. A
+  // frame carrying a marker the list has never heard of is not a finished
+  // draft, however complete the list looks on its own - and a list and a
+  // frame that have drifted apart is precisely what a stale record looks
+  // like.
+  return parseGaps(frame).length !== gaps.length;
 }
 
 /**

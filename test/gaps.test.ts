@@ -132,18 +132,30 @@ describe('type hints', () => {
 });
 
 describe('the gate', () => {
+  it('a filled gap set still reads as open when the frame has residue', () => {
+    // The case the optional argument used to hide: every gap accounted for,
+    // and a mangled marker still sitting in the text.
+    const gaps = parseGaps('I shipped [[what?]].');
+    const filled = applyUserFill(gaps, gaps[0]!.id, 'the parser');
+    expect(hasOpenGaps(filled, 'I shipped [[what?]] in ⟨how long�>.')).toBe(true);
+  });
+
   it('an open gap blocks self-publishing', () => {
-    const gaps = parseGaps('I spent [[how long?]] on [[what?]].');
-    expect(hasOpenGaps(gaps)).toBe(true);
+    const frame = 'I spent [[how long?]] on [[what?]].';
+    const gaps = parseGaps(frame);
+    expect(hasOpenGaps(gaps, frame)).toBe(true);
     expect(isGrounded(gaps)).toBe(false);
   });
 
   it('a user fill closes the gap but does not earn autopilot', () => {
     // Autopilot has no human in it. A human-typed fill proves a human was
     // there, which is precisely the thing autopilot cannot supply.
-    let gaps = parseGaps('I spent [[how long?]] on it.');
+    const frame = 'I spent [[how long?]] on it.';
+    let gaps = parseGaps(frame);
     gaps = applyUserFill(gaps, gaps[0]!.id, 'two days');
-    expect(hasOpenGaps(gaps)).toBe(false);
+    // Closed, and the frame carries no residue - both halves checked, which
+    // is the point of the argument being required.
+    expect(hasOpenGaps(gaps, frame)).toBe(false);
     expect(isGrounded(gaps)).toBe(false);
   });
 

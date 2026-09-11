@@ -111,10 +111,7 @@ export async function enqueue(
     dailyCapOverride: account.dailyCapOverride,
     isPremium: account.isPremium,
     invitesWithNoteLast30d: usage.invitesWithNoteLast30d,
-    usesNote:
-      input.payload.kind === 'send_invite'
-        ? input.payload.note.trim().length > 0
-        : true,
+    pendingInvites: usage.pendingInvites,
   });
 
   if (!decision.allowed) {

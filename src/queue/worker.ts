@@ -15,6 +15,7 @@
 import { getAccount, updateAccount } from '../db/accounts.js';
 import { enqueue } from './scheduler.js';
 import { LIMITS } from '../policy.js';
+import { isOpen, recordFailure, recordSuccess } from './breaker.js';
 import {
   ACTION_COLUMNS,
   lastCompletedAt,
@@ -367,6 +368,10 @@ export async function tick(
   now: Date = new Date(),
   db: Db = getDb(),
 ): Promise<boolean> {
+  // Before claiming anything. Claiming and then refusing would mark the action
+  // in_flight and hand it a failure it never earned.
+  if (isOpen(now)) return false;
+
   const action = await claimNext(now, db);
   if (!action) return false;
 
@@ -399,17 +404,25 @@ export async function tick(
   try {
     await execute(action, provider, db, now);
     await markDone(action.id, db);
+    // The provider answered. Whatever run of failures preceded this was not an
+    // outage, so the count starts again.
+    recordSuccess();
     if (action.payload.kind === 'send_invite') {
       await setSuggestionStatus(action.payload.suggestionId, 'approved', null, db);
     }
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     if (isProviderError(err)) {
+      // Only vendor-shaped failures count. A checkpoint or an auth error is
+      // this one account's problem and is handled where it belongs; counting
+      // it here would let one unhealthy account stop sending for everybody.
+      recordFailure(err.failureClass, now);
       await onFailure(action, err.failureClass, message, err.retryAfterMs, now, db);
     } else {
       // Anything that is not a ProviderError has leaked past the adapter.
       // Treat as transient (the safe reading) but it indicates a bug.
       console.error('[worker] unclassified error — adapter leak?', err);
+      recordFailure('transient', now);
       await onFailure(action, 'transient', message, null, now, db);
     }
   }

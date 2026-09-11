@@ -12,6 +12,7 @@ import { soonestScheduledAt } from './db/actions.js';
 import type { Db } from './db/index.js';
 import { getDb } from './db/index.js';
 import { acceptanceBand, budget, noteAllowance, warmupDay } from './policy.js';
+import { openUntil as breakerOpenUntil } from './queue/breaker.js';
 import type { BudgetResult } from './policy.js';
 import type { AcceptanceBand, Account, ActionKind } from './types.js';
 
@@ -76,6 +77,12 @@ export interface AccountState {
   notesRemaining: number;
   noteAllowance: number;
   nextScheduledAt: string | null;
+  /**
+   * Set while the provider looks broken for everyone. Distinct from
+   * pausedReason: nothing is wrong with this account and there is nothing for
+   * the user to fix.
+   */
+  providerOutageUntil: string | null;
   checkpointUntil: string | null;
 }
 
@@ -177,6 +184,7 @@ export async function getAccountState(
     notesRemaining,
     noteAllowance: noteAllowance(account.isPremium),
     nextScheduledAt: next ? next.toISOString() : null,
+    providerOutageUntil: breakerOpenUntil()?.toISOString() ?? null,
     checkpointUntil: account.checkpointUntil ? account.checkpointUntil.toISOString() : null,
   };
 }

@@ -230,6 +230,15 @@ export const LIMITS = {
    */
   MAX_PENDING_INVITES: 120,
 
+  /* --- Circuit breaker ----------------------------------------------- *
+   * Many accounts failing at once is a vendor problem, not a per-user one.
+   * Without this, each account discovers the outage separately by burning its
+   * own retry budget, and the queue spends the outage manufacturing backoff.
+   * ------------------------------------------------------------------- */
+  BREAKER_FAILURE_THRESHOLD: 8,
+  BREAKER_WINDOW_MS: 2 * 60 * 1000,
+  BREAKER_COOLDOWN_MS: 10 * 60 * 1000,
+
   /**
    * Withdrawals per day and per week.
    *

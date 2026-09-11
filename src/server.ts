@@ -13,6 +13,7 @@ import { suggestionsRouter } from './http/routes/suggestions.js';
 import { webhooksRouter } from './http/routes/webhooks.js';
 import { getProvider } from './providers/index.js';
 import { startWorker } from './queue/worker.js';
+import { openUntil as breakerOpenUntil } from './queue/breaker.js';
 
 export function createApp(): express.Express {
   const app = express();
@@ -32,7 +33,11 @@ export function createApp(): express.Express {
     // than an inference from behaviour. Railway injects these; they are absent
     // locally.
     res.json({
-      ok: true,
+    ok: true,
+    // A global stop must be visible from outside. Without this the only
+    // symptom of a tripped breaker is "nothing is happening", which is what a
+    // dead process looks like too.
+    providerOutage: breakerOpenUntil()?.toISOString() ?? null,
       provider: getProvider().name,
       fake: usingFakeProvider,
       commit: (process.env['RAILWAY_GIT_COMMIT_SHA'] ?? 'local').slice(0, 7),

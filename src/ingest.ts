@@ -131,7 +131,7 @@ export async function ingestOwnWriting(
       // A repost is someone else's writing however it got there.
       if (p.isRepost) continue;
       const decided = ourPosts.has(p.urn) ? ourPosts.get(p.urn) : ourPostsByText.get(key(p.text));
-      const attended = decided === undefined || decided !== 'timer';
+      const attended = decided === undefined || decided === 'user';
       await store('linkedin_post', p.text, p.urn, attended);
     }
   } catch (err) {
@@ -174,11 +174,16 @@ export async function ingestOwnWriting(
         result.provenance.ours++;
         if (byId) result.provenance.matchedById++;
         else result.provenance.matchedByText++;
-        if (decided === 'timer') result.provenance.sentByTimer++;
         if (decided === 'user') result.provenance.sentByUser++;
+        else result.provenance.sentByTimer++; // timer or unknown: both unproven
       }
-      // Not ours at all means written by hand on the platform: theirs.
-      const attended = decided === undefined || decided !== 'timer';
+      // Fail closed. Not ours at all means written by hand on the platform and
+      // is theirs. Ours requires positive proof a person approved it: 'timer'
+      // and null both mean we cannot show anyone read it, and null is the
+      // common case for anything sent before the decider was preserved.
+      // Treating unknown as human is the same fail-open that let machine text
+      // become citable in the first place.
+      const attended = decided === undefined || decided === 'user';
       await store('linkedin_comment', c.text, c.id, attended);
     }
   } catch (err) {

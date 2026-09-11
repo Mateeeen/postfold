@@ -8,6 +8,7 @@
 import { describe, expect, it } from 'vitest';
 import { addDocument, evidenceMaterial, trustFor, voiceSamples } from '../src/db/documents.js';
 import { fixture } from './helpers.js';
+import { createDraft, setDraftStatus } from '../src/db/drafts.js';
 import {
   appearsIn,
   applyRetrieved,
@@ -281,6 +282,33 @@ describe('unattended output is not evidence', () => {
       // And the number it invented cannot prove a numeral in the next draft.
       const { converted } = proveNumerals('Now 63% of teams do this.', citable);
       expect(converted).toContain('63%');
+    } finally {
+      f.db.close();
+    }
+  });
+});
+
+describe('authorship survives sending', () => {
+  it('does not lose decided_by when a sent draft is marked approved', async () => {
+    // The worker marks a draft 'approved' after sending and passes null for
+    // the decider. A plain assignment wiped the one field that says whether a
+    // person stood behind the words, so every sent item later looked
+    // hand-written and machine text became citable as the user's own.
+    const f = await fixture();
+    try {
+      const draft = await createDraft(
+        { accountId: f.account.id, kind: 'comment', text: 'A drafted reply.', rationale: 'x' },
+        f.db,
+      );
+      await setDraftStatus(draft.id, 'queued', 'timer', null, f.db);
+      await setDraftStatus(draft.id, 'approved', null, null, f.db);
+
+      const row = f.db
+        .prepare('SELECT status, decided_by FROM drafts WHERE id = ?')
+        .get(draft.id) as { status: string; decided_by: string | null };
+
+      expect(row.status).toBe('approved');
+      expect(row.decided_by).toBe('timer');
     } finally {
       f.db.close();
     }

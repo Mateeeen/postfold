@@ -415,7 +415,12 @@ export async function setDraftStatus(
     `UPDATE drafts
         SET status = @status,
             decided_at = @now,
-            decided_by = @decidedBy,
+            -- COALESCE, not assignment. The worker calls this with null to
+            -- move a sent draft to 'approved', and a plain assignment wiped the
+            -- record of who approved it - the field that decides whether the
+            -- text counts as the user's own writing. Null here means "leave it
+            -- alone", never "nobody".
+            decided_by = COALESCE(@decidedBy, decided_by),
             text = COALESCE(@text, text)
       WHERE id = @id`,
   ).run({ id, status, decidedBy, text, now: nowIso() });

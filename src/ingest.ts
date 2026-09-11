@@ -31,6 +31,22 @@ export interface IngestResult {
   /** Items downgraded because nobody read them before they went out. */
   unattended: number;
   evidenceTotal: number;
+  /**
+   * How each ingested item was classified, and why.
+   *
+   * Here because the first version of this filter silently classified
+   * everything as human-authored and the only symptom was a number that did
+   * not drop when it should have. A count that can only be read by inference
+   * is a count that hides its own bugs.
+   */
+  provenance: {
+    ours: number;
+    theirs: number;
+    matchedById: number;
+    matchedByText: number;
+    sentByTimer: number;
+    sentByUser: number;
+  };
 }
 
 /**
@@ -48,7 +64,15 @@ export async function ingestOwnWriting(
   const account = await getAccount(accountId, db);
   if (!account) throw new Error(`Unknown account ${accountId}`);
 
-  const result: IngestResult = { evidence: 0, voice: 0, unattended: 0, evidenceTotal: 0 };
+  const result: IngestResult = {
+    evidence: 0,
+    voice: 0,
+    unattended: 0,
+    evidenceTotal: 0,
+    provenance: {
+      ours: 0, theirs: 0, matchedById: 0, matchedByText: 0, sentByTimer: 0, sentByUser: 0,
+    },
+  };
   if (!account.ownerPersonId) return result;
 
   /** Text, flattened enough that retyping or re-encoding still matches. */
@@ -129,7 +153,7 @@ export async function ingestOwnWriting(
   for (const row of db
     .prepare(
       `SELECT posted_comment_id AS id, text, decided_by FROM drafts
-        WHERE account_id = ? AND kind = 'comment' AND status IN ('queued', 'sent', 'posted')`,
+        WHERE account_id = ? AND kind = 'comment' AND status IN ('queued', 'approved')`,
     )
     .all(accountId) as { id: string | null; text: string; decided_by: string | null }[]) {
     if (row.id) ourComments.set(row.id, row.decided_by);
@@ -143,9 +167,16 @@ export async function ingestOwnWriting(
       limit: 50,
     });
     for (const c of comments) {
-      const decided = ourComments.has(c.id)
-        ? ourComments.get(c.id)
-        : ourComments.get(key(c.text));
+      const byId = ourComments.has(c.id);
+      const decided = byId ? ourComments.get(c.id) : ourComments.get(key(c.text));
+      if (decided === undefined) result.provenance.theirs++;
+      else {
+        result.provenance.ours++;
+        if (byId) result.provenance.matchedById++;
+        else result.provenance.matchedByText++;
+        if (decided === 'timer') result.provenance.sentByTimer++;
+        if (decided === 'user') result.provenance.sentByUser++;
+      }
       // Not ours at all means written by hand on the platform: theirs.
       const attended = decided === undefined || decided !== 'timer';
       await store('linkedin_comment', c.text, c.id, attended);

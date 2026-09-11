@@ -14,6 +14,7 @@
 
 import { ProviderError } from '../provider.js';
 import type {
+  AuthoredComment,
   AuthoredPost,
   AccountHealth,
   FoundPost,
@@ -42,6 +43,7 @@ export interface FakeCall {
 export interface FakeProviderOptions {
   /** Voice samples returned by listAuthoredPosts. */
   authoredPosts?: AuthoredPost[];
+  authoredComments?: AuthoredComment[];
   /** Set to have the next call throw. Consumed on use unless `sticky`. */
   failWith?: FailureClass | null;
   sticky?: boolean;
@@ -63,6 +65,7 @@ export class FakeProvider implements SocialProvider {
   connectedTo: Set<string>;
   /** Override the voice samples returned by listAuthoredPosts. */
   authoredPosts: AuthoredPost[] | null;
+  authoredComments: AuthoredComment[] | null;
   private readonly log: (msg: string) => void;
 
   constructor(options: FakeProviderOptions = {}) {
@@ -71,6 +74,7 @@ export class FakeProvider implements SocialProvider {
     this.health = options.health ?? { status: 'active', reason: null };
     this.connectedTo = new Set(options.connectedTo ?? []);
     this.authoredPosts = options.authoredPosts ?? null;
+    this.authoredComments = options.authoredComments ?? null;
     this.log = options.log ?? ((msg) => console.log(`[fake-provider] ${msg}`));
   }
 
@@ -191,6 +195,30 @@ export class FakeProvider implements SocialProvider {
   }
 
   /** Voice samples. `authoredPosts` lets a test supply its own. */
+  /** Two comments: one we posted, one written by hand. */
+  async listAuthoredComments(input: {
+    providerAccountId: string;
+    providerPersonId: string;
+    limit: number;
+  }): Promise<AuthoredComment[]> {
+    this.record('listAuthoredComments', input);
+    if (this.authoredComments) return this.authoredComments.slice(0, input.limit);
+    return [
+      {
+        id: 'fake-comment-ours',
+        text: 'A comment this product posted on their behalf.',
+        postUrn: 'urn:fake:post:1',
+        postedAt: new Date(),
+      },
+      {
+        id: 'fake-comment-theirs',
+        text: 'A comment they wrote by hand on the platform itself.',
+        postUrn: 'urn:fake:post:2',
+        postedAt: new Date(),
+      },
+    ].slice(0, input.limit);
+  }
+
   async listAuthoredPosts(input: {
     providerAccountId: string;
     providerPersonId: string;

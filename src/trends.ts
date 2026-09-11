@@ -562,7 +562,7 @@ export async function approveDraft(
   if (draft.kind === 'post') {
     // A post draft becomes a real posts row at approval time, not at draft
     // time — an unapproved draft should never appear in the published list.
-    const post = await createPost(draft.accountId, text, db);
+    const post = await createPost(draft.accountId, text, db, input.by);
     result = await enqueue(
       {
         accountId: draft.accountId,

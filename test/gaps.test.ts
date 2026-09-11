@@ -240,3 +240,49 @@ describe('trust levels', () => {
     }
   });
 });
+
+/* ================================================================== *
+ * Human authorship
+ *
+ * Verifiable origin is not enough: a comment this product sent unattended
+ * carries the user's byline and is still machine text. Citing it would let
+ * one autopilot draft license the specifics in the next.
+ * ================================================================== */
+
+describe('unattended output is not evidence', () => {
+  it('keeps a timer-sent comment out of citable material', async () => {
+    const f = await fixture();
+    try {
+      // What the ingest path does with an unattended item: stores it at voice
+      // trust so it still shapes tone, and never as something quotable.
+      await addDocument(
+        {
+          accountId: f.account.id,
+          source: 'note',
+          text: 'Our autopilot comment claiming 63% of teams now do this.',
+          externalId: 'c-timer',
+        },
+        f.db,
+      );
+      await addDocument(
+        {
+          accountId: f.account.id,
+          source: 'linkedin_comment',
+          text: MATERIAL,
+          externalId: 'c-approved',
+        },
+        f.db,
+      );
+
+      const citable = await evidenceMaterial(f.account.id, 40, f.db);
+      expect(citable).toContain('three weeks');
+      expect(citable).not.toContain('63% of teams');
+
+      // And the number it invented cannot prove a numeral in the next draft.
+      const { converted } = proveNumerals('Now 63% of teams do this.', citable);
+      expect(converted).toContain('63%');
+    } finally {
+      f.db.close();
+    }
+  });
+});

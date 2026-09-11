@@ -17,6 +17,7 @@ import { ProviderError } from '../provider.js';
 import type {
   AccountHealth,
   AccountOwner,
+  AuthoredComment,
   AuthoredPost,
   ConnectableAccount,
   PendingInvitation,
@@ -130,6 +131,14 @@ interface UnipileSearchItem {
 interface UnipileFullProfile {
   follower_count?: number;
   connections_count?: number;
+}
+
+interface UnipileAuthoredComment {
+  id?: string;
+  text?: string;
+  post_urn?: string;
+  post_id?: string;
+  date?: string;
 }
 
 interface UnipileAuthoredPost {
@@ -606,6 +615,32 @@ export class UnipileProvider implements SocialProvider {
       });
     }
     return out;
+  }
+
+  async listAuthoredComments(input: {
+    providerAccountId: string;
+    providerPersonId: string;
+    limit: number;
+  }): Promise<AuthoredComment[]> {
+    const res = await this.request<UnipileList<UnipileAuthoredComment>>(
+      `/api/v1/users/${encodeURIComponent(input.providerPersonId)}/comments`,
+      {
+        method: 'GET',
+        query: {
+          account_id: input.providerAccountId,
+          limit: String(input.limit),
+        },
+      },
+    );
+
+    return (res.items ?? [])
+      .filter((c) => (c.text ?? '').trim() !== '' && typeof c.id === 'string')
+      .map((c) => ({
+        id: c.id as string,
+        text: (c.text ?? '').trim(),
+        postUrn: c.post_urn ?? c.post_id ?? null,
+        postedAt: c.date ? new Date(c.date) : null,
+      }));
   }
 
   async listAuthoredPosts(input: {

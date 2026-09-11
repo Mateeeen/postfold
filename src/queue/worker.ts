@@ -225,8 +225,11 @@ async function execute(
       // the leading indicator for whether autopilot will ever be reachable.
       try {
         const ing = await ingestOwnWriting(action.accountId, provider, db);
-        if (ing.posts + ing.comments > 0) {
-          console.log(`[ingest] +${ing.posts} posts +${ing.comments} comments (evidence: ${ing.evidenceTotal})`);
+        if (ing.evidence + ing.voice > 0) {
+          console.log(
+            `[ingest] +${ing.evidence} citable, +${ing.voice} voice `
+              + `(${ing.unattended} downgraded as unattended), evidence total ${ing.evidenceTotal}`,
+          );
         }
       } catch (err) {
         console.warn('[worker] voice bank ingestion failed', err);

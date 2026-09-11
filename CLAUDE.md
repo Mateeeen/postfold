@@ -63,6 +63,12 @@ specific, hard-to-reverse harm to a real person's LinkedIn account.
     bootstrap faster makes that article citable as the user's own claim, and
     the fabrication guarantee degrades without anyone noticing.
 
+11. **Evidence requires human authorship, not just verifiable origin.** A post
+    or comment this product sent unattended left the platform under the user's
+    name and is still machine text. Quoting it back as their own material lets
+    one autopilot draft license the specifics in the next. Human-touched —
+    written by hand, or approved in review — is evidence; timer-sent is voice.
+
 ## Things that look wrong and are not
 
 - **better-sqlite3 is synchronous, but every DB function is `async`.** The

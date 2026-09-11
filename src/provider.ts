@@ -92,6 +92,15 @@ export interface FoundPost {
  * else's words are a usable sample of your voice is a drafting decision, and
  * this seam does not make drafting decisions.
  */
+/** A comment written by the account owner. */
+export interface AuthoredComment {
+  /** Provider comment id. Matched against what we posted to tell them apart. */
+  id: string;
+  text: string;
+  postUrn: string | null;
+  postedAt: Date | null;
+}
+
 export interface AuthoredPost {
   /** Needed to pull engagers; without it this list is only something to read. */
   urn: string;
@@ -179,6 +188,19 @@ export interface SocialProvider {
     providerPersonId: string;
     limit: number;
   }): Promise<AuthoredPost[]>;
+
+  /**
+   * Comments this person wrote, newest first. Read-only.
+   *
+   * Returns everything they have commented, including comments this product
+   * posted on their behalf - the platform does not distinguish. The caller
+   * separates them by comment id, which is why `id` is not optional here.
+   */
+  listAuthoredComments(input: {
+    providerAccountId: string;
+    providerPersonId: string;
+    limit: number;
+  }): Promise<AuthoredComment[]>;
 
   /** Reply to someone else's post. */
   postComment(input: PostCommentInput): Promise<PostCommentResult>;

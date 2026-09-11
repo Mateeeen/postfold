@@ -24,8 +24,33 @@ export interface Readiness {
   groundedDraftRate: number | null;
   fills: { retrieved: number; user: number; open: number };
   autopilotReady: boolean;
+  /** Held, but not citable, because nobody read it before it was sent. */
+  unattendedDocuments: number;
   /** Written for the user, naming the missing thing. Null when ready. */
   blockedBy: string | null;
+}
+
+/**
+ * Why autopilot is not available, in the user's terms.
+ *
+ * Losing an unlock reads as breakage unless the reason is stated, and "add
+ * more material" is not a reason to someone who has already added plenty of
+ * the wrong kind. The unattended count is named explicitly because it is the
+ * surprising half: writing that is theirs by byline and not by authorship.
+ */
+function blockedMessage(short: number, unattended: number, pasted: number): string {
+  const need = `${short} more ${short === 1 ? 'post or comment' : 'posts or comments'} you have written or approved.`;
+
+  if (unattended > 0) {
+    return `Autopilot paused — ${unattended} of your ${unattended + pasted + (short > 0 ? 0 : 0)} `
+      + `saved ${unattended === 1 ? 'item was' : 'items were'} sent unattended and cannot be `
+      + `quoted as yours. ${need}`;
+  }
+  if (pasted > 0) {
+    return `Autopilot needs more of your own writing to work from. Pasted notes and links `
+      + `shape the writing style but cannot be quoted as yours. ${need}`;
+  }
+  return `Autopilot needs more of your own writing to work from. ${need}`;
 }
 
 export async function readiness(
@@ -64,6 +89,18 @@ export async function readiness(
     if (parsed.every((g) => g.value !== null && g.source === 'retrieved')) grounded++;
   }
 
+  // Material we hold but cannot cite because nobody read it before it went
+  // out. Counting it is what lets the message explain a lost unlock instead of
+  // just showing a smaller number.
+  const unattended = (
+    db
+      .prepare(
+        `SELECT COUNT(*) AS n FROM documents
+          WHERE account_id = ? AND trust = 'voice' AND source = 'note'`,
+      )
+      .get(accountId) as { n: number }
+  ).n;
+
   const ready = evidence >= LIMITS.AUTOPILOT_MIN_EVIDENCE_DOCS;
   const short = LIMITS.AUTOPILOT_MIN_EVIDENCE_DOCS - evidence;
 
@@ -73,12 +110,9 @@ export async function readiness(
     groundedDraftRate: withGaps === 0 ? null : grounded / withGaps,
     fills,
     autopilotReady: ready,
+    unattendedDocuments: unattended,
     blockedBy: ready
       ? null
-      : `Autopilot needs more of your own writing to work from — ${short} more `
-        + `${short === 1 ? 'post or comment' : 'posts or comments'}. `
-        + (voice > 0
-            ? 'Pasted notes and links shape the writing style but cannot be quoted as yours.'
-            : 'It can only quote things you actually wrote.'),
+      : blockedMessage(short, unattended, voice - unattended),
   };
 }

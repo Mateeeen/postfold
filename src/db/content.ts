@@ -43,12 +43,14 @@ export async function createPost(
   accountId: string,
   text: string,
   db: Db = getDb(),
+  /** Who approved it. 'timer' means nobody read it — see db/018. */
+  decidedBy: 'user' | 'timer' | null = null,
 ): Promise<Post> {
   const id = newId();
   db.prepare(
-    `INSERT INTO posts (id, account_id, text, status, created_at)
-     VALUES (@id, @accountId, @text, 'queued', @now)`,
-  ).run({ id, accountId, text, now: nowIso() });
+    `INSERT INTO posts (id, account_id, text, status, created_at, decided_by)
+     VALUES (@id, @accountId, @text, 'queued', @now, @decidedBy)`,
+  ).run({ id, accountId, text, now: nowIso(), decidedBy });
   const row = db.prepare(`SELECT ${POST_COLUMNS} FROM posts WHERE id = ?`).get(id) as PostRow;
   return mapPost(row);
 }

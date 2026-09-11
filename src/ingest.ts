@@ -51,12 +51,23 @@ export async function ingestOwnWriting(
   const result: IngestResult = { evidence: 0, voice: 0, unattended: 0, evidenceTotal: 0 };
   if (!account.ownerPersonId) return result;
 
+  /** Text, flattened enough that retyping or re-encoding still matches. */
+  const key = (t: string): string => t.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+
   const store = async (
     source: DocumentSource,
     text: string,
     externalId: string,
     attended: boolean,
   ): Promise<void> => {
+    // Re-ingestion must be able to DOWNGRADE. A row stored as evidence before
+    // this rule existed would otherwise keep its trust level forever, because
+    // the upsert keys on source and the source is what carries trust.
+    db.prepare(
+      `DELETE FROM documents
+        WHERE account_id = ? AND external_id = ? AND source <> ?`,
+    ).run(accountId, externalId, attended ? source : 'note');
+
     // A voice-trust row for something whose source would normally be evidence:
     // 'note' is the vehicle, because trust is derived from source and nothing
     // may pass a trust level in directly.
@@ -77,10 +88,13 @@ export async function ingestOwnWriting(
   // Posts we published, and how they were approved. Absent from this map means
   // it never went through us, which makes it unambiguously theirs.
   const ourPosts = new Map<string, string | null>();
+  const ourPostsByText = new Map<string, string | null>();
   for (const row of db
-    .prepare(`SELECT urn, decided_by FROM posts WHERE account_id = ? AND urn IS NOT NULL`)
-    .all(accountId) as { urn: string; decided_by: string | null }[]) {
-    ourPosts.set(row.urn, row.decided_by);
+    .prepare(`SELECT urn, text, decided_by FROM posts WHERE account_id = ?`)
+    .all(accountId) as { urn: string | null; text: string; decided_by: string | null }[]) {
+    if (row.urn) ourPosts.set(row.urn, row.decided_by);
+    // Same reasoning as comments: urn forms differ between publish and read.
+    ourPostsByText.set(key(row.text), row.decided_by);
   }
 
   try {
@@ -92,7 +106,8 @@ export async function ingestOwnWriting(
     for (const p of authored) {
       // A repost is someone else's writing however it got there.
       if (p.isRepost) continue;
-      const attended = !ourPosts.has(p.urn) || ourPosts.get(p.urn) !== 'timer';
+      const decided = ourPosts.has(p.urn) ? ourPosts.get(p.urn) : ourPostsByText.get(key(p.text));
+      const attended = decided === undefined || decided !== 'timer';
       await store('linkedin_post', p.text, p.urn, attended);
     }
   } catch (err) {
@@ -104,14 +119,21 @@ export async function ingestOwnWriting(
   // The platform returns every comment they have written, including the ones
   // this product posted for them; it does not distinguish. We can, because we
   // recorded the id of each comment we sent.
+  //
+  // Matched on BOTH id and text. The id alone fails open: the list endpoint
+  // returns bare numeric ids while postComment stores `comment_id ?? id ??
+  // 'unknown'` - a different namespace with a poisoned fallback - so nothing
+  // ever matched, every comment looked human-authored, and the evidence count
+  // grew silently. Text is the key that cannot drift between two endpoints.
   const ourComments = new Map<string, string | null>();
   for (const row of db
     .prepare(
-      `SELECT posted_comment_id AS id, decided_by FROM drafts
-        WHERE account_id = ? AND kind = 'comment' AND posted_comment_id IS NOT NULL`,
+      `SELECT posted_comment_id AS id, text, decided_by FROM drafts
+        WHERE account_id = ? AND kind = 'comment' AND status IN ('queued', 'sent', 'posted')`,
     )
-    .all(accountId) as { id: string; decided_by: string | null }[]) {
-    ourComments.set(row.id, row.decided_by);
+    .all(accountId) as { id: string | null; text: string; decided_by: string | null }[]) {
+    if (row.id) ourComments.set(row.id, row.decided_by);
+    ourComments.set(key(row.text), row.decided_by);
   }
 
   try {
@@ -121,7 +143,11 @@ export async function ingestOwnWriting(
       limit: 50,
     });
     for (const c of comments) {
-      const attended = !ourComments.has(c.id) || ourComments.get(c.id) !== 'timer';
+      const decided = ourComments.has(c.id)
+        ? ourComments.get(c.id)
+        : ourComments.get(key(c.text));
+      // Not ours at all means written by hand on the platform: theirs.
+      const attended = decided === undefined || decided !== 'timer';
       await store('linkedin_comment', c.text, c.id, attended);
     }
   } catch (err) {

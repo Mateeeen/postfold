@@ -30,6 +30,28 @@ export type AccountStatus =
   | 'restricted'
   | 'disconnected';
 
+/**
+ * How much a given action type may do on its own.
+ *
+ *   draft  written and left alone; never queues by itself
+ *   ask    queued when a person approves it
+ *   auto   queued without one, under autopilot's own caps
+ */
+export type AutomationMode = 'draft' | 'ask' | 'auto';
+
+/** The four things that can act. Keyed by intent, not by ActionKind. */
+export type AutomatedKind = 'post' | 'comment' | 'connect' | 'withdraw';
+
+export type AutomationModes = Record<AutomatedKind, AutomationMode>;
+
+export const DEFAULT_AUTOMATION_MODES: AutomationModes = {
+  post: 'ask',
+  comment: 'ask',
+  connect: 'ask',
+  // Descriptive: reconciliation already queues withdrawals unsupervised.
+  withdraw: 'auto',
+};
+
 export interface Account {
   id: string;
   userId: string;
@@ -73,6 +95,7 @@ export interface Account {
   isPremium: boolean | null;
   /** The owner's own headline, used to give the drafter their voice. */
   headline: string | null;
+  automationModes: AutomationModes;
   /** Display only. Signed and expiring, refreshed rather than trusted. */
   avatarUrl: string | null;
   publicIdentifier: string | null;

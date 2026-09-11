@@ -4,6 +4,7 @@
  * Signatures are async; bodies are synchronous better-sqlite3 calls.
  */
 
+import { DEFAULT_AUTOMATION_MODES } from '../types.js';
 import type { Db } from './index.js';
 import {
   boolToInt,
@@ -17,7 +18,7 @@ import {
   nowIso,
 } from './index.js';
 import { LIMITS } from '../policy.js';
-import type { Account, AccountStatus, ActionKind } from '../types.js';
+import type { Account, AccountStatus, ActionKind, AutomationModes } from '../types.js';
 
 export interface AccountRow {
   id: string;
@@ -37,6 +38,7 @@ export interface AccountRow {
   owner_person_id: string | null;
   is_premium: number | null;
   headline: string | null;
+  automation_modes: string;
   avatar_url: string | null;
   public_identifier: string | null;
   location: string | null;
@@ -69,6 +71,10 @@ export function mapAccount(row: AccountRow): Account {
     ownerPersonId: row.owner_person_id,
     isPremium: row.is_premium === null ? null : row.is_premium === 1,
     headline: row.headline,
+    automationModes: {
+      ...DEFAULT_AUTOMATION_MODES,
+      ...decodeJson<Partial<AutomationModes>>(row.automation_modes, {}),
+    },
     avatarUrl: row.avatar_url,
     publicIdentifier: row.public_identifier,
     location: row.location,
@@ -83,7 +89,8 @@ export function mapAccount(row: AccountRow): Account {
 const SELECT = `SELECT id, user_id, provider_account_id, display_name, status,
   sending_enabled, paused_reason, connected_at, timezone, send_days,
   window_start_hour, window_end_hour, daily_cap_override, checkpoint_until,
-  owner_person_id, is_premium, headline, avatar_url, public_identifier, location,
+  owner_person_id, is_premium, headline, automation_modes, avatar_url,
+  public_identifier, location,
   follower_count, connections_count, impressions_7d, posts_7d, stats_updated_at
   FROM accounts`;
 
@@ -155,6 +162,7 @@ export interface AccountPatch {
   ownerPersonId?: string | null;
   isPremium?: boolean | null;
   headline?: string | null;
+  automationModes?: AutomationModes;
   /** Repointing at a new provider tenant. See the reconnect route. */
   providerAccountId?: string;
   displayName?: string;
@@ -217,6 +225,10 @@ export async function updateAccount(
   if (patch.displayName !== undefined) {
     sets.push('display_name = @displayName');
     params['displayName'] = patch.displayName;
+  }
+  if (patch.automationModes !== undefined) {
+    sets.push('automation_modes = @automationModes');
+    params['automationModes'] = encodeJson(patch.automationModes);
   }
   if (patch.avatarUrl !== undefined) {
     sets.push('avatar_url = @avatarUrl');

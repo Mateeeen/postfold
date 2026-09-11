@@ -466,6 +466,35 @@ export async function dueForAutoApproval(
  * user rejected, still used up today's slot. Otherwise a rejection would
  * immediately produce a replacement, which is nagging, not automation.
  */
+/**
+ * How many posts in a row went out without anyone reading them.
+ *
+ * Counted from the most recent backwards and stopping at the first reviewed
+ * one, because the rule is about an unbroken chain: three low-signal posts in
+ * succession compound into an account-level penalty, while the same three
+ * spread among reviewed posts do not.
+ */
+export async function consecutiveAutoPosts(
+  accountId: string,
+  db: Db = getDb(),
+): Promise<number> {
+  const rows = db
+    .prepare(
+      `SELECT decided_by FROM drafts
+        WHERE account_id = ? AND kind = 'post' AND status IN ('queued', 'approved')
+        ORDER BY decided_at DESC, created_at DESC
+        LIMIT 20`,
+    )
+    .all(accountId) as { decided_by: string | null }[];
+
+  let run = 0;
+  for (const r of rows) {
+    if (r.decided_by === 'timer') run++;
+    else break;
+  }
+  return run;
+}
+
 export async function countDraftsSince(
   accountId: string,
   kind: DraftKind,

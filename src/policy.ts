@@ -17,6 +17,8 @@ import type {
   AcceptanceBand,
   AccountStatus,
   ActionKind,
+  AutomatedKind,
+  AutomationMode,
   FailureClass,
 } from './types.js';
 
@@ -235,7 +237,23 @@ export const LIMITS = {
    * Without this, each account discovers the outage separately by burning its
    * own retry budget, and the queue spends the outage manufacturing backoff.
    * ------------------------------------------------------------------- */
-  BREAKER_FAILURE_THRESHOLD: 8,
+/* --- Autopilot ------------------------------------------------------ *
+   * Far below the manual ceilings on purpose. The cap is not about what an
+   * account survives - it is about how much goes out under someone's name
+   * before a lagging signal catches a problem. Invites resolve over days.
+   * -------------------------------------------------------------------- */
+  AUTO_DAILY_POST_CAP: 1,
+  AUTO_DAILY_COMMENT_CAP: 8,
+  AUTO_DAILY_CONNECT_CAP: 8,
+  /**
+   * Unreviewed posts in a row before the next one drops to 'ask'.
+   *
+   * Three consecutive low-signal posts compound into an account-level penalty.
+   * Breaking the chain costs one review and is cheap insurance.
+   */
+  MAX_CONSECUTIVE_AUTO_POSTS: 2,
+
+    BREAKER_FAILURE_THRESHOLD: 8,
   BREAKER_WINDOW_MS: 2 * 60 * 1000,
   BREAKER_COOLDOWN_MS: 10 * 60 * 1000,
 
@@ -394,6 +412,117 @@ export function warmupCap(day: number): number {
  * draw a conclusion in either direction — a new account with 2 sent and 0
  * accepted is not a spammer, it is new.
  */
+/* ================================================================== *
+ * Autopilot
+ * ================================================================== */
+
+export interface AutopilotInput {
+  kind: AutomatedKind;
+  mode: AutomationMode;
+  /** Acceptance band. Only invites care, but it is always available. */
+  band: AcceptanceBand;
+  /** Has this type been earned yet? See readiness. */
+  unlocked: boolean;
+  /** Unreviewed posts already published in a row. Posts only. */
+  consecutiveAutoPosts: number;
+  /**
+   * Posts only: every gap filled from the user's own material. Mode grants
+   * permission; groundedness is still the gate. An ungrounded post is
+   * machine-written specifics nobody checked, whatever the mode says.
+   */
+  grounded: boolean;
+}
+
+export interface AutopilotDecision {
+  /** May this go out without a person looking at it? */
+  eligible: boolean;
+  /** Why not, written for the user. Null when eligible. */
+  reason: string | null;
+  /** True when autopilot turned ITSELF off, which must be announced. */
+  selfDisabled: boolean;
+}
+
+/**
+ * May this act unattended?
+ *
+ * Every branch here is a reason to hold, and holding always means "needs
+ * you" rather than "dropped" - the work still exists, it just waits.
+ */
+export function autopilotDecision(input: AutopilotInput): AutopilotDecision {
+  const hold = (reason: string, selfDisabled = false): AutopilotDecision => ({
+    eligible: false,
+    reason,
+    selfDisabled,
+  });
+
+  if (input.mode !== 'auto') return hold('Waiting for you to approve it.');
+
+  if (!input.unlocked) {
+    return hold('Autopilot is not unlocked for this yet.');
+  }
+
+  if (input.kind === 'connect') {
+    // Invites switch autopilot OFF at watch, where manual merely halves. The
+    // asymmetry is the point: a human throttled to half their cap is still
+    // reading each person, and autopilot is not.
+    if (input.band === 'watch' || input.band === 'throttled' || input.band === 'critical') {
+      return hold(
+        'Acceptance has dropped, so invites have been handed back to you for a bit.',
+        true,
+      );
+    }
+    if (input.band !== 'healthy') {
+      return hold('Not enough resolved invitations yet to let this run on its own.');
+    }
+  }
+
+  if (input.kind === 'post') {
+    if (!input.grounded) {
+      // The mode grants permission. Groundedness is still the gate.
+      return hold('This one has blanks only you can fill.');
+    }
+    if (input.consecutiveAutoPosts >= LIMITS.MAX_CONSECUTIVE_AUTO_POSTS) {
+      return hold(
+        `That would be ${input.consecutiveAutoPosts + 1} posts in a row nobody read. `
+          + 'This one is waiting for you.',
+      );
+    }
+  }
+
+  return { eligible: true, reason: null, selfDisabled: false };
+}
+
+/** The autopilot cap for a type, used instead of the manual one. */
+/** Which automated kind an ActionKind belongs to, if any. */
+export function automatedKindFor(kind: ActionKind): AutomatedKind | null {
+  switch (kind) {
+    case 'create_post':
+      return 'post';
+    case 'post_comment':
+      return 'comment';
+    case 'send_invite':
+      return 'connect';
+    case 'withdraw_invite':
+      return 'withdraw';
+    default:
+      // The read-only syncs have no mode: nothing they do reaches anyone.
+      return null;
+  }
+}
+
+export function autoCapFor(kind: AutomatedKind): number {
+  switch (kind) {
+    case 'post':
+      return LIMITS.AUTO_DAILY_POST_CAP;
+    case 'comment':
+      return LIMITS.AUTO_DAILY_COMMENT_CAP;
+    case 'connect':
+      return LIMITS.AUTO_DAILY_CONNECT_CAP;
+    case 'withdraw':
+      return LIMITS.DAILY_WITHDRAW_CAP;
+  }
+}
+
 export function acceptanceBand(
   rate: number | null,
   sample: number,
@@ -439,6 +568,12 @@ export interface BudgetInput {
   invitesWithNoteLast30d?: number;
   /** Invites awaiting an answer. Its own stop, separate from the rate. */
   pendingInvites?: number;
+  /**
+   * The mode this action is running under. When 'auto', the autopilot cap
+   * applies instead of the manual one - far lower, because the limit is about
+   * how much goes out unread before a lagging signal catches a problem.
+   */
+  mode?: AutomationMode;
 }
 
 export interface BudgetResult {
@@ -515,13 +650,20 @@ export function budget(input: BudgetInput): BudgetResult {
   const withOverride =
     typeof override === 'number' ? Math.min(banded, Math.max(0, override)) : banded;
 
+  // Autopilot caps replace the manual ones rather than sitting beside them.
+  const autoKind = automatedKindFor(input.kind);
+  const autoCapped =
+    input.mode === 'auto' && autoKind !== null
+      ? Math.min(withOverride, autoCapFor(autoKind))
+      : withOverride;
+
   const cap = isInvite
-    ? Math.min(withOverride, LIMITS.HARD_DAILY_INVITE_CAP)
+    ? Math.min(autoCapped, LIMITS.HARD_DAILY_INVITE_CAP)
     : input.kind === 'withdraw_invite'
       ? Math.min(withOverride, LIMITS.DAILY_WITHDRAW_CAP)
     : isComment
-      ? Math.min(withOverride, LIMITS.HARD_DAILY_COMMENT_CAP)
-      : withOverride;
+      ? Math.min(autoCapped, LIMITS.HARD_DAILY_COMMENT_CAP)
+      : autoCapped;
 
   const used = input.sentLast24h + input.pendingSameKind;
   const remaining = Math.max(0, cap - used);

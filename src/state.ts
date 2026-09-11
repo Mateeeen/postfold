@@ -14,7 +14,12 @@ import { getDb } from './db/index.js';
 import { acceptanceBand, budget, noteAllowance, warmupDay } from './policy.js';
 import { openUntil as breakerOpenUntil } from './queue/breaker.js';
 import type { BudgetResult } from './policy.js';
-import type { AcceptanceBand, Account, ActionKind } from './types.js';
+import type {
+  AcceptanceBand,
+  Account,
+  ActionKind,
+  AutomationModes,
+} from './types.js';
 
 export interface CapView {
   cap: number;
@@ -83,6 +88,7 @@ export interface AccountState {
    * the user to fix.
    */
   providerOutageUntil: string | null;
+  automationModes: AutomationModes;
   checkpointUntil: string | null;
 }
 
@@ -185,6 +191,7 @@ export async function getAccountState(
     noteAllowance: noteAllowance(account.isPremium),
     nextScheduledAt: next ? next.toISOString() : null,
     providerOutageUntil: breakerOpenUntil()?.toISOString() ?? null,
+    automationModes: account.automationModes,
     checkpointUntil: account.checkpointUntil ? account.checkpointUntil.toISOString() : null,
   };
 }

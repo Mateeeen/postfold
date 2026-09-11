@@ -16,7 +16,7 @@ import { ACTION_COLUMNS, mapAction } from '../db/actions.js';
 import type { ActionRow } from '../db/actions.js';
 import type { Db } from '../db/index.js';
 import { encodeJson, getDb, immediateTransaction, newId, nowIso } from '../db/index.js';
-import { budget, LIMITS, nextSlot, soonSlot } from '../policy.js';
+import { automatedKindFor, budget, LIMITS, nextSlot, soonSlot } from '../policy.js';
 import type { BudgetResult } from '../policy.js';
 import type { Action, ActionPayload } from '../types.js';
 
@@ -112,6 +112,10 @@ export async function enqueue(
     isPremium: account.isPremium,
     invitesWithNoteLast30d: usage.invitesWithNoteLast30d,
     pendingInvites: usage.pendingInvites,
+    mode: (() => {
+      const k = automatedKindFor(input.payload.kind);
+      return k === null ? undefined : account.automationModes[k];
+    })(),
   });
 
   if (!decision.allowed) {

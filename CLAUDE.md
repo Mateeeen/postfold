@@ -30,10 +30,12 @@ specific, hard-to-reverse harm to a real person's LinkedIn account.
    insert must be one decision, or "how much is promised today" stops being
    knowable and the daily cap becomes advisory.
 
-4. **No connection request is ever queued without explicit per-person user
-   approval.** There is no bulk-approve, no auto-approve, no "approve all", and
-   no scoring threshold above which we send on the user's behalf. The engager
-   pipeline produces *suggestions*; a human turns one into an action.
+4. **No bulk operations on people.** No interface may let a human action
+   multiple people in one gesture — no select-all, no approve-all, no
+   bulk-withdraw. Autopilot may act on one person at a time under its own
+   caps, band requirements and auto-off. The danger in bulk was never
+   automation; it was the absence of any per-person constraint, and autopilot
+   has more of those than a human clicking down a list, not fewer.
 
 5. **Per-account send concurrency is exactly 1.** The queue drains one action
    at a time, paced by `scheduled_at`. A burst of sends is the single most

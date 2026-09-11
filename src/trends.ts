@@ -12,12 +12,20 @@
  * for connection requests, which can never be auto-approved.
  */
 
+import { readiness } from './readiness.js';
 import { evidenceMaterial, voiceSamples } from './db/documents.js';
-import { applyRetrieved, hasOpenGaps, parseGaps, proveNumerals } from './gaps.js';
-import { getAccount } from './db/accounts.js';
+import {
+  applyRetrieved,
+  hasOpenGaps,
+  isGrounded,
+  parseGaps,
+  proveNumerals,
+} from './gaps.js';
+import { getAcceptance, getAccount } from './db/accounts.js';
 import { createPost, listPosts } from './db/content.js';
 import {
   addKeyword,
+  consecutiveAutoPosts,
   countDraftsSince,
   createDraft,
   getDiscoveredPost,
@@ -34,7 +42,12 @@ import type { AuthorContext, LlmProvider, SourcePost } from './llm.js';
 import { getLlm } from './llm/index.js';
 import type { ImageProvider } from './images.js';
 import { getImages } from './images/index.js';
-import { autoApproveAt, LIMITS } from './policy.js';
+import {
+  acceptanceBand,
+  autoApproveAt,
+  autopilotDecision,
+  LIMITS,
+} from './policy.js';
 import type { SocialProvider } from './provider.js';
 import { getProvider } from './providers/index.js';
 import { enqueue } from './queue/scheduler.js';
@@ -286,6 +299,9 @@ export async function draftPost(
   db: Db = getDb(),
   images: ImageProvider = getImages(),
 ): Promise<Draft | null> {
+  const account = await getAccount(input.accountId, db);
+  if (!account) throw new Error(`Unknown account ${input.accountId}`);
+
   const author = await authorContext(input.accountId, db);
   let trending = await recentDiscoveredPosts(
     input.accountId,
@@ -344,6 +360,19 @@ export async function draftPost(
     }
   }
 
+  // May this go out unattended? Asked once, here, so the answer and the
+  // reason travel together rather than being recomputed by whatever displays
+  // the draft later.
+  const acceptance = await getAcceptance(input.accountId, db);
+  const decision = autopilotDecision({
+    kind: 'post',
+    mode: account.automationModes.post,
+    band: acceptanceBand(acceptance.rate, acceptance.sample).band,
+    unlocked: (await readiness(input.accountId, db)).autopilotReady,
+    consecutiveAutoPosts: await consecutiveAutoPosts(input.accountId, db),
+    grounded: !hasOpenGaps(gaps, frame) && isGrounded(gaps),
+  });
+
   // An image is a bonus, never a precondition. If drawing fails the words are
   // still worth publishing, so the failure is logged and the draft goes on
   // without one.
@@ -378,10 +407,10 @@ export async function draftPost(
       imageUrl: image?.url ?? null,
       imagePrompt: image?.prompt ?? null,
       gaps,
-      // A post with an open gap cannot publish itself, whatever the caller
-      // asked for. This is the structural half of the fabrication guarantee:
-      // the deadline is refused here, not merely discouraged in a prompt.
-      autoApproveAt: hasOpenGaps(gaps, frame) ? null : autoApproveAt(new Date()),
+      // Two conditions, and the mode is only one of them. Groundedness is
+      // still the gate: an ungrounded post is machine-written specifics
+      // nobody checked, whatever permission the mode grants.
+      autoApproveAt: decision.eligible ? autoApproveAt(new Date()) : null,
     },
     db,
   );

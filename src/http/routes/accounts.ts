@@ -1,11 +1,7 @@
+import type { AutomatedKind, AutomationMode } from '../../types.js';
 import { Router } from 'express';
 import { LIMITS } from '../../policy.js';
-import {
-  backfillNoteUsage,
-  createAccount,
-  listAccounts,
-  updateAccount,
-} from '../../db/accounts.js';
+import { backfillNoteUsage, createAccount, getAccount, listAccounts, updateAccount } from '../../db/accounts.js';
 import { getAccountOwner, listConnectableAccounts } from '../../providers/index.js';
 import { refreshOwnerProfile } from '../../profile.js';
 import { ingestOwnWriting } from '../../ingest.js';
@@ -233,6 +229,39 @@ accountsRouter.post(
 
     const result = await ingestOwnWriting(id);
     res.json({ ...result, readiness: await readiness(id) });
+  }),
+);
+
+/**
+ * Set how much a given action type may do on its own.
+ *
+ * Only ever writes what was sent, so a client that knows about three of the
+ * four types cannot silently reset the one it has not heard of.
+ */
+accountsRouter.post(
+  '/api/accounts/:id/modes',
+  asyncHandler(async (req, res) => {
+    const id = param(req, 'id');
+    if (!(await ownsAccount(req, id))) return notFound(res, 'No such account');
+
+    const account = await getAccount(id);
+    if (!account) return notFound(res, 'No such account');
+
+    const valid: AutomationMode[] = ['draft', 'ask', 'auto'];
+    const kinds: AutomatedKind[] = ['post', 'comment', 'connect', 'withdraw'];
+    const next = { ...account.automationModes };
+
+    for (const kind of kinds) {
+      const wanted = req.body?.[kind];
+      if (wanted === undefined) continue;
+      if (typeof wanted !== 'string' || !valid.includes(wanted as AutomationMode)) {
+        return badRequest(res, `${kind} must be one of: ${valid.join(', ')}`);
+      }
+      next[kind] = wanted as AutomationMode;
+    }
+
+    await updateAccount(id, { automationModes: next });
+    res.json(await getAccountState(id));
   }),
 );
 

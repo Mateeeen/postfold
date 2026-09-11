@@ -12,6 +12,7 @@
  * for connection requests, which can never be auto-approved.
  */
 
+import { applyRetrieved, hasOpenGaps, parseGaps, proveNumerals } from './gaps.js';
 import { getAccount } from './db/accounts.js';
 import { createPost, listPosts } from './db/content.js';
 import {
@@ -310,6 +311,35 @@ export async function draftPost(
     idea: input.idea,
   });
 
+  // The drafter emitted a frame with holes. Try to fill them from what this
+  // person has actually written; anything the material cannot answer stays
+  // open, and an open gap is what stops the post publishing itself.
+  const material = author.recentPosts.join('\n\n');
+
+  // Any numeral the model asserted in prose that their own material cannot
+  // account for becomes a gap. The remedy for an unsourced specific is to ask
+  // for it, not to throw the draft away.
+  const proven = proveNumerals(result.text, material);
+  if (proven.converted.length > 0) {
+    console.log(
+      `[trends] gapped ${proven.converted.length} unsourced numeral(s): ${proven.converted.join(', ')}`,
+    );
+  }
+  const frame = proven.frame;
+
+  let gaps = parseGaps(frame);
+  if (gaps.length > 0 && material.trim() !== '') {
+    try {
+      const proposals = await llm.fillGaps({
+        gaps: gaps.map((g) => ({ id: g.id, prompt: g.prompt })),
+        material,
+      });
+      gaps = applyRetrieved(gaps, proposals, material);
+    } catch (err) {
+      console.warn('[trends] gap retrieval failed; gaps stay open', err);
+    }
+  }
+
   // An image is a bonus, never a precondition. If drawing fails the words are
   // still worth publishing, so the failure is logged and the draft goes on
   // without one.
@@ -325,7 +355,9 @@ export async function draftPost(
       ? trending[0]
       : (trending.find((p) => p.attachments.length > 0) ?? trending[0]);
     const drawn = await images.draw({
-      prompt: imagePromptFor(result.text, visual?.text),
+      // The frame with markers stripped: an image prompt full of
+      // [[how many?]] is a prompt about brackets.
+      prompt: imagePromptFor(frame.replace(/\[[[^\]]*\]\]/g, 'a number'), visual?.text),
     });
     if (drawn) image = { url: drawn.url, prompt: drawn.prompt };
   } catch (err) {
@@ -336,12 +368,16 @@ export async function draftPost(
     {
       accountId: input.accountId,
       kind: 'post',
-      text: result.text,
+      text: frame,
       rationale: result.rationale,
       model: llm.model,
-      autoApproveAt: input.options.autoApprove ? autoApproveAt(new Date()) : null,
       imageUrl: image?.url ?? null,
       imagePrompt: image?.prompt ?? null,
+      gaps,
+      // A post with an open gap cannot publish itself, whatever the caller
+      // asked for. This is the structural half of the fabrication guarantee:
+      // the deadline is refused here, not merely discouraged in a prompt.
+      autoApproveAt: hasOpenGaps(gaps, frame) ? null : autoApproveAt(new Date()),
     },
     db,
   );

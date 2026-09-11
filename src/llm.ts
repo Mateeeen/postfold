@@ -92,6 +92,17 @@ export interface LlmProvider {
     idea?: string;
   }): Promise<PostDraft>;
 
+  /**
+   * Fill gaps from the author's own material, or decline.
+   *
+   * Must return a verbatim span from the material as evidence for each fill;
+   * the caller checks it. A gap it cannot honestly fill is omitted.
+   */
+  fillGaps(input: {
+    gaps: { id: string; prompt: string }[];
+    material: string;
+  }): Promise<{ id: string; value: string; evidence: string }[]>;
+
   /** Write a reply to one specific post. */
   draftComment(input: {
     author: AuthorContext;

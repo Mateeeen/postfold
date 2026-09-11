@@ -382,11 +382,25 @@ export class GroqLlm implements LlmProvider {
         'Say one concrete thing and stop. No engagement bait, no asking people to',
         'comment, no listing five lessons.',
         '',
-        'HARD RULE: do not invent a first-person story. No "last week I", no "I',
-        'watched", no numbers from an experience you were not given. You know only',
-        'what is in the writing samples above; everything else you would be making',
-        'up and publishing under a real person\'s name. Argue the position on its',
-        'merits instead - that is what makes it defensible.',
+        'SPECIFICS ARE GAPS, NOT INVENTIONS. You do not know what this person',
+        'did, when, with what, or how much. Wherever the sentence wants a',
+        'number, a duration, a tool name, a team size or an outcome you were',
+        'not given, write a gap instead: [[a question in double square brackets]]',
+        'naming what is needed. Example:',
+        '',
+        '  In the last [[how long?]] I watched a [[how many lines?]] pull request',
+        '  get reviewed in [[how long did review take?]].',
+        '',
+        'Use 2 to 4 gaps. A gap is free; a wrong number published under a real',
+        'name is not. Never guess a plausible value - the whole point is that',
+        'you were not allowed to produce one.',
+        '',
+        'This applies to EVERY number, not only ones about this person. A',
+        'statistic about the industry, a benchmark, a percentage, an "N times',
+        'more likely" - you were not given those either, and inventing one is',
+        'the same failure wearing a lab coat. Gap it or leave it out.',
+        '',
+        'Everything outside the gaps must stand on its own argument.',
         '',
         'End with 2 to 4 hashtags on their own final line. They must be terms a',
         'person in this field would actually follow - specific to the subject, not',
@@ -415,6 +429,42 @@ export class GroqLlm implements LlmProvider {
    * the quote actually appears in the source material. A comment that cannot
    * point at its own basis is dropped, not published.
    */
+  async fillGaps(input: {
+    gaps: { id: string; prompt: string }[];
+    material: string;
+  }): Promise<{ id: string; value: string; evidence: string }[]> {
+    if (input.gaps.length === 0 || input.material.trim() === '') return [];
+
+    const result = await this.complete<{
+      fills?: { id?: string; value?: string; evidence?: string }[];
+    }>(
+      'You retrieve facts from a person\'s own writing. You never supply a fact that '
+        + 'is not in the material. Reply with JSON only.',
+      [
+        'MATERIAL (everything this person has written):',
+        input.material.slice(0, 6000),
+        '',
+        'Each item below is a blank in a draft. Fill ONLY the ones the material',
+        'actually answers. Omit the rest - an omitted blank is the correct',
+        'outcome and costs nothing.',
+        '',
+        ...input.gaps.map((g) => `  ${g.id}: ${g.prompt}`),
+        '',
+        '"value" is the short phrase to drop into the sentence.',
+        '"evidence" is a VERBATIM span from the material containing it. The',
+        'evidence is checked against the material; a fill whose evidence is not',
+        'found there is discarded, so inventing one wastes the slot.',
+        '',
+        'JSON: {"fills":[{"id":"...","value":"...","evidence":"..."}]}',
+      ].join('\n'),
+      900,
+    );
+
+    return (result.fills ?? [])
+      .filter((f) => f.id && f.value && f.evidence)
+      .map((f) => ({ id: String(f.id), value: String(f.value), evidence: String(f.evidence) }));
+  }
+
   async draftComment(input: {
     author: AuthorContext;
     post: SourcePost;

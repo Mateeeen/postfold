@@ -115,6 +115,53 @@ export const LIMITS = {
    */
   AUTO_PUBLISH_ENABLED: false,
 
+  /* --- Quality gate -------------------------------------------------- *
+   * Provisional until the corpus distribution says otherwise. Every number
+   * here is a guess calibrated against known-good human posts, not against
+   * this user's own drafts, of which there are not yet enough.
+   * ------------------------------------------------------------------- */
+
+  /** Weights. Must sum to 1; a null signal redistributes its weight. */
+  Q_WEIGHT_VARIANCE: 0.35,
+  Q_WEIGHT_SPECIFICITY: 0.3,
+  Q_WEIGHT_FIRST_PERSON: 0.15,
+  Q_WEIGHT_CLICHE: 0.1,
+  Q_WEIGHT_STRUCTURE: 0.1,
+
+  /** Words per sentence, standard deviation. */
+  Q_SENTENCE_SD_FLOOR: 4,
+  Q_SENTENCE_SD_MID: 6,
+  Q_SENTENCE_SD_CEIL: 9,
+  /**
+   * Characters per line, standard deviation. The second half of signal 1.
+   * Punchy platform-native writing - one thought per line - is flat on
+   * sentence length and high here. Machine output is flat on both, which is
+   * what makes taking the better of the two safe rather than lenient.
+   */
+  Q_LINE_SD_FLOOR: 8,
+  Q_LINE_SD_MID: 20,
+  Q_LINE_SD_CEIL: 40,
+  /** Below this many sentences, variance says nothing and is skipped. */
+  Q_MIN_SENTENCES: 3,
+
+  /** Specific tokens per 100 words. */
+  Q_SPECIFICITY_FLOOR: 1.5,
+  Q_SPECIFICITY_CEIL: 4,
+
+  /** Each cliche or structural tell costs this much of its signal. */
+  Q_PENALTY_PER_HIT: 0.34,
+
+  /** Composite bands. */
+  Q_BAND_STRONG: 0.65,
+  Q_BAND_OK: 0.4,
+
+  /** Comments are scored on different signals, not a lower bar. */
+  Q_COMMENT_WEIGHT_RELEVANCE: 0.6,
+  Q_COMMENT_WEIGHT_SPECIFICITY: 0.4,
+  Q_COMMENT_BAND_OK: 0.35,
+  /** Rare terms shared with the parent post needed for full relevance. */
+  Q_COMMENT_RARE_TERMS_FOR_FULL: 3,
+
   /** Never two sends closer together than this, at any budget. */
   MIN_GAP_MINUTES: 8,
   /** Never spread so thin that a day's budget cannot fit in the window. */

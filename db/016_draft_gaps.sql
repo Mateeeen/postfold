@@ -1,0 +1,15 @@
+-- Gaps: the specifics the drafter is not allowed to invent.
+--
+-- The drafter emits a frame with holes in it — "In the last <how long?> I
+-- watched a <how big?> pull request" — and a hole cannot be a fabrication
+-- because nothing was ever produced to be wrong. That turns a prompt rule
+-- ("do not invent") into a structural property.
+--
+-- A gap is filled from one of exactly two sources: the user types it, or it is
+-- retrieved verbatim from their own material. Anything else leaves it open.
+-- A draft with an open gap can never publish itself, which is what makes the
+-- fabrication guarantee hold without a human in the loop.
+--
+-- JSON because gaps are read and written as a set with their draft, never
+-- queried across.
+ALTER TABLE drafts ADD COLUMN gaps TEXT;

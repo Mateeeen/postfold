@@ -282,6 +282,24 @@ export type DraftStatus = 'pending' | 'approved' | 'queued' | 'dismissed' | 'exp
  * waits indefinitely, which is the default for anything the user has not
  * explicitly opted into.
  */
+/**
+ * A specific the drafter was not allowed to invent.
+ *
+ * `value` null means open. An open gap blocks auto-publishing outright - see
+ * the note in db/016. `source` records which of the two permitted fills
+ * supplied it, because only 'retrieved' is grounded in material that already
+ * existed.
+ */
+export interface Gap {
+  id: string;
+  /** What the writer is being asked for: "how long?", "which tool?" */
+  prompt: string;
+  value: string | null;
+  source: 'user' | 'retrieved' | null;
+  /** For a retrieved fill: the verbatim span it came from, so it is checkable. */
+  evidence: string | null;
+}
+
 export interface Draft {
   id: string;
   accountId: string;
@@ -297,6 +315,8 @@ export interface Draft {
   autoApproveAt: Date | null;
   /** Data URI. Null when none was drawn, which is a normal outcome. */
   imageUrl: string | null;
+  /** Specifics left for a human or for retrieval. Empty for comments. */
+  gaps: Gap[];
   /** What the image was asked for, so a bad one is explainable. */
   imagePrompt: string | null;
   createdAt: Date;

@@ -269,6 +269,7 @@ interface DraftRow {
   auto_approve_at: string | null;
   image_url: string | null;
   image_prompt: string | null;
+  gaps: string | null;
   created_at: string;
   decided_at: string | null;
   decided_by: string | null;
@@ -286,13 +287,14 @@ const mapDraft = (r: DraftRow): Draft => ({
   autoApproveAt: fromIso(r.auto_approve_at),
   imageUrl: r.image_url,
   imagePrompt: r.image_prompt,
+  gaps: decodeJson<Draft['gaps']>(r.gaps, []),
   createdAt: fromIsoRequired(r.created_at),
   decidedAt: fromIso(r.decided_at),
   decidedBy: r.decided_by as 'user' | 'timer' | null,
 });
 
 const DRAFT_COLUMNS = `id, account_id, kind, status, text, rationale,
-  discovered_post_id, model, auto_approve_at, image_url, image_prompt,
+  discovered_post_id, model, auto_approve_at, image_url, image_prompt, gaps,
   created_at, decided_at, decided_by`;
 
 export async function createDraft(
@@ -306,6 +308,7 @@ export async function createDraft(
     autoApproveAt?: Date | null;
     imageUrl?: string | null;
     imagePrompt?: string | null;
+    gaps?: Draft['gaps'];
   },
   db: Db = getDb(),
 ): Promise<Draft> {
@@ -313,10 +316,10 @@ export async function createDraft(
   db.prepare(
     `INSERT INTO drafts (
        id, account_id, kind, status, text, rationale, discovered_post_id,
-       model, auto_approve_at, image_url, image_prompt, created_at
+       model, auto_approve_at, image_url, image_prompt, gaps, created_at
      ) VALUES (
        @id, @accountId, @kind, 'pending', @text, @rationale, @discoveredPostId,
-       @model, @autoApproveAt, @imageUrl, @imagePrompt, @now
+       @model, @autoApproveAt, @imageUrl, @imagePrompt, @gaps, @now
      )`,
   ).run({
     id,
@@ -329,6 +332,7 @@ export async function createDraft(
     autoApproveAt: input.autoApproveAt ? input.autoApproveAt.toISOString() : null,
     imageUrl: input.imageUrl ?? null,
     imagePrompt: input.imagePrompt ?? null,
+    gaps: encodeJson(input.gaps && input.gaps.length > 0 ? input.gaps : null),
     now: nowIso(),
   });
   const row = db.prepare(`SELECT ${DRAFT_COLUMNS} FROM drafts WHERE id = ?`).get(id) as DraftRow;

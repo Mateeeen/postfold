@@ -90,6 +90,19 @@ export class FakeLlm implements LlmProvider {
     };
   }
 
+  async fillGaps(input: {
+    gaps: { id: string; prompt: string }[];
+    material: string;
+  }): Promise<{ id: string; value: string; evidence: string }[]> {
+    this.record('fillGaps', { gaps: input.gaps.length });
+    // Fills the first gap only, with a span that really is in the material,
+    // so the verification path is exercised rather than bypassed.
+    const first = input.gaps[0];
+    const span = input.material.split('\n')[0]?.trim() ?? '';
+    if (!first || span === '') return [];
+    return [{ id: first.id, value: span.split(' ').slice(0, 3).join(' '), evidence: span }];
+  }
+
   async draftComment(input: {
     author: AuthorContext;
     post: SourcePost;

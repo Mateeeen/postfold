@@ -37,7 +37,28 @@ const EVIDENCE_SOURCES: readonly DocumentSource[] = [
   'pull_request',
 ];
 
-export function trustFor(source: DocumentSource): Trust {
+/**
+ * Did a person demonstrably stand behind these words?
+ *
+ * Not a boolean, because a boolean invites `!machineWritten` and every one of
+ * the three fail-open bugs in this layer was a negation of an unknown.
+ */
+export type Authorship = 'human-verified' | 'unproven';
+
+/**
+ * Trust, defaulting to voice.
+ *
+ * Both conditions must hold for evidence: a source whose authorship CAN be
+ * verified, and an authorship signal that actually verifies it. The parameter
+ * defaults to 'unproven' so that a caller which forgets to pass one gets the
+ * safe answer rather than the permissive one - invariant 12, made structural
+ * rather than remembered.
+ */
+export function trustFor(
+  source: DocumentSource,
+  authorship: Authorship = 'unproven',
+): Trust {
+  if (authorship !== 'human-verified') return 'voice';
   return EVIDENCE_SOURCES.includes(source) ? 'evidence' : 'voice';
 }
 
@@ -72,9 +93,12 @@ const map = (r: Row): VoiceDocument => ({
 });
 
 /**
- * Store a document. Trust is derived from the source, never passed in — a
- * caller that could choose its own trust level is a caller that can promote
- * pasted text to evidence by accident.
+ * Store a document.
+ *
+ * Trust is derived, never passed in: a caller that could choose its own trust
+ * level can promote pasted text to evidence by accident. It needs both a
+ * source whose authorship can be verified AND an authorship signal that
+ * verifies it, and the latter defaults to `unproven`.
  */
 export async function addDocument(
   input: {
@@ -82,6 +106,8 @@ export async function addDocument(
     source: DocumentSource;
     text: string;
     externalId?: string | null;
+    /** Omitted means unproven, which means voice. Never default to trust. */
+    authorship?: Authorship;
   },
   db: Db = getDb(),
 ): Promise<VoiceDocument | null> {
@@ -97,7 +123,7 @@ export async function addDocument(
   ).run({
     id,
     accountId: input.accountId,
-    trust: trustFor(input.source),
+    trust: trustFor(input.source, input.authorship),
     source: input.source,
     text,
     externalId: input.externalId ?? null,

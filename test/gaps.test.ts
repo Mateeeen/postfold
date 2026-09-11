@@ -192,12 +192,15 @@ describe('appearsIn', () => {
 
 describe('trust levels', () => {
   it('classifies sources by whether authorship is verifiable', () => {
-    expect(trustFor('linkedin_post')).toBe('evidence');
-    expect(trustFor('linkedin_comment')).toBe('evidence');
-    expect(trustFor('commit')).toBe('evidence');
-    // The whole point: pasting an article must not make it quotable as yours.
-    expect(trustFor('note')).toBe('voice');
-    expect(trustFor('link')).toBe('voice');
+    // Source decides whether evidence is POSSIBLE; authorship decides whether
+    // it is granted. Both are required.
+    expect(trustFor('linkedin_post', 'human-verified')).toBe('evidence');
+    expect(trustFor('linkedin_comment', 'human-verified')).toBe('evidence');
+    expect(trustFor('commit', 'human-verified')).toBe('evidence');
+    // The whole point: pasting an article must not make it quotable as yours,
+    // however confidently the caller asserts authorship.
+    expect(trustFor('note', 'human-verified')).toBe('voice');
+    expect(trustFor('link', 'human-verified')).toBe('voice');
   });
 
   it('keeps pasted text out of citable material', async () => {
@@ -208,7 +211,13 @@ describe('trust levels', () => {
         f.db,
       );
       await addDocument(
-        { accountId: f.account.id, source: 'linkedin_post', text: MATERIAL, externalId: 'p1' },
+        {
+          accountId: f.account.id,
+          source: 'linkedin_post',
+          text: MATERIAL,
+          externalId: 'p1',
+          authorship: 'human-verified',
+        },
         f.db,
       );
 
@@ -271,6 +280,7 @@ describe('unattended output is not evidence', () => {
           source: 'linkedin_comment',
           text: MATERIAL,
           externalId: 'c-approved',
+          authorship: 'human-verified',
         },
         f.db,
       );
@@ -309,6 +319,35 @@ describe('authorship survives sending', () => {
 
       expect(row.status).toBe('approved');
       expect(row.decided_by).toBe('timer');
+    } finally {
+      f.db.close();
+    }
+  });
+});
+
+describe('invariant 12: the trust layer defaults to voice', () => {
+  it('refuses evidence when authorship is not asserted', () => {
+    // The parameter is omitted, as a forgetful caller would. An
+    // evidence-capable source is not enough on its own.
+    expect(trustFor('linkedin_post')).toBe('voice');
+    expect(trustFor('linkedin_comment')).toBe('voice');
+  });
+
+  it('grants evidence only on positive proof', () => {
+    expect(trustFor('linkedin_post', 'human-verified')).toBe('evidence');
+    expect(trustFor('linkedin_post', 'unproven')).toBe('voice');
+    // Proof does not promote a source that can never be verified.
+    expect(trustFor('note', 'human-verified')).toBe('voice');
+  });
+
+  it('stores as voice when a caller forgets the authorship argument', async () => {
+    const f = await fixture();
+    try {
+      await addDocument(
+        { accountId: f.account.id, source: 'linkedin_post', text: MATERIAL, externalId: 'p1' },
+        f.db,
+      );
+      expect(await evidenceMaterial(f.account.id, 40, f.db)).toBe('');
     } finally {
       f.db.close();
     }

@@ -69,6 +69,14 @@ specific, hard-to-reverse harm to a real person's LinkedIn account.
     one autopilot draft license the specifics in the next. Human-touched —
     written by hand, or approved in review — is evidence; timer-sent is voice.
 
+12. **In the trust layer, the default is voice.** Evidence requires positive
+    proof of human authorship; any missing, null or ambiguous signal resolves
+    to voice. Three separate bugs here all widened what counted as the user's
+    own writing, and all three were silent, because each was a negation of an
+    unknown (`!== 'timer'`, `!has(id)`). Write the positive test. The
+    `authorship` parameter defaults to `unproven` so that forgetting it fails
+    closed rather than open.
+
 ## Things that look wrong and are not
 
 - **better-sqlite3 is synchronous, but every DB function is `async`.** The

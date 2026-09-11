@@ -17,6 +17,19 @@ import type { Db } from './db/index.js';
 import { getDb } from './db/index.js';
 import { LIMITS } from './policy.js';
 
+/**
+ * Records whose authorship was destroyed before the decider stopped being
+ * erased. Reported rather than inferred: this is permanent data loss and the
+ * only honest thing to do with it is state the size.
+ */
+export interface AuthorshipGap {
+  sentDrafts: number;
+  sentDraftsWithDecider: number;
+  sentDraftsMissingDecider: number;
+  publishedPosts: number;
+  publishedPostsMissingDecider: number;
+}
+
 export interface Readiness {
   evidenceDocuments: number;
   voiceDocuments: number;
@@ -28,6 +41,7 @@ export interface Readiness {
   unattendedDocuments: number;
   /** Written for the user, naming the missing thing. Null when ready. */
   blockedBy: string | null;
+  authorshipGap: AuthorshipGap;
 }
 
 /**
@@ -38,12 +52,17 @@ export interface Readiness {
  * the wrong kind. The unattended count is named explicitly because it is the
  * surprising half: writing that is theirs by byline and not by authorship.
  */
-function blockedMessage(short: number, unattended: number, pasted: number): string {
+function blockedMessage(
+  short: number,
+  unattended: number,
+  pasted: number,
+  total: number,
+): string {
   const need = `${short} more ${short === 1 ? 'post or comment' : 'posts or comments'} you have written or approved.`;
 
   if (unattended > 0) {
-    return `Autopilot paused — ${unattended} of your ${unattended + pasted + (short > 0 ? 0 : 0)} `
-      + `saved ${unattended === 1 ? 'item was' : 'items were'} sent unattended and cannot be `
+    return `Autopilot paused — ${unattended} of your ${total} saved `
+      + `${unattended === 1 ? 'item was' : 'items were'} sent unattended and cannot be `
       + `quoted as yours. ${need}`;
   }
   if (pasted > 0) {
@@ -101,6 +120,25 @@ export async function readiness(
       .get(accountId) as { n: number }
   ).n;
 
+  const drafts = db
+    .prepare(
+      `SELECT
+         COUNT(*) AS sent,
+         COUNT(*) FILTER (WHERE decided_by IS NOT NULL) AS withDecider
+       FROM drafts
+       WHERE account_id = ? AND status IN ('queued', 'approved')`,
+    )
+    .get(accountId) as { sent: number; withDecider: number };
+
+  const posts = db
+    .prepare(
+      `SELECT
+         COUNT(*) AS published,
+         COUNT(*) FILTER (WHERE decided_by IS NULL) AS missing
+       FROM posts WHERE account_id = ? AND status = 'published'`,
+    )
+    .get(accountId) as { published: number; missing: number };
+
   const ready = evidence >= LIMITS.AUTOPILOT_MIN_EVIDENCE_DOCS;
   const short = LIMITS.AUTOPILOT_MIN_EVIDENCE_DOCS - evidence;
 
@@ -111,8 +149,15 @@ export async function readiness(
     fills,
     autopilotReady: ready,
     unattendedDocuments: unattended,
+    authorshipGap: {
+      sentDrafts: drafts.sent,
+      sentDraftsWithDecider: drafts.withDecider,
+      sentDraftsMissingDecider: drafts.sent - drafts.withDecider,
+      publishedPosts: posts.published,
+      publishedPostsMissingDecider: posts.missing,
+    },
     blockedBy: ready
       ? null
-      : blockedMessage(short, unattended, voice - unattended),
+      : blockedMessage(short, unattended, voice - unattended, evidence + voice),
   };
 }

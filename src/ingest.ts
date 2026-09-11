@@ -19,7 +19,7 @@
 
 import { getAccount } from './db/accounts.js';
 import { addDocument, evidenceCount } from './db/documents.js';
-import type { DocumentSource } from './db/documents.js';
+import type { Authorship, DocumentSource } from './db/documents.js';
 import type { Db } from './db/index.js';
 import { getDb } from './db/index.js';
 import type { SocialProvider } from './provider.js';
@@ -31,6 +31,8 @@ export interface IngestResult {
   /** Items downgraded because nobody read them before they went out. */
   unattended: number;
   evidenceTotal: number;
+  /** Rows removed because this run no longer sees them. */
+  pruned: number;
   /**
    * How each ingested item was classified, and why.
    *
@@ -69,6 +71,7 @@ export async function ingestOwnWriting(
     voice: 0,
     unattended: 0,
     evidenceTotal: 0,
+    pruned: 0,
     provenance: {
       ours: 0, theirs: 0, matchedById: 0, matchedByText: 0, sentByTimer: 0, sentByUser: 0,
     },
@@ -78,12 +81,31 @@ export async function ingestOwnWriting(
   /** Text, flattened enough that retyping or re-encoding still matches. */
   const key = (t: string): string => t.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 
+  /**
+   * The single place authorship is decided.
+   *
+   * `undefined` means the item never passed through us - written by hand on
+   * the platform, and theirs. Anything we sent must name a person: 'user' and
+   * nothing else. 'timer' and null are both unproven, and null is the common
+   * case for everything sent before the decider stopped being erased.
+   */
+  const authorshipOf = (decided: string | null | undefined): Authorship =>
+    decided === undefined || decided === 'user' ? 'human-verified' : 'unproven';
+
+  // Everything this run actually saw, per source. Ingestion is authoritative
+  // for the sources it manages, so a row it no longer sees is stale - and a
+  // stale row keeps whatever trust it was written with, which is how an
+  // orphan from an earlier, more permissive version stays citable forever.
+  const seen = new Map<DocumentSource, Set<string>>();
+  const fetched = new Set<DocumentSource>();
+
   const store = async (
     source: DocumentSource,
     text: string,
     externalId: string,
-    attended: boolean,
+    authorship: Authorship,
   ): Promise<void> => {
+    const attended = authorship === 'human-verified';
     // Re-ingestion must be able to DOWNGRADE. A row stored as evidence before
     // this rule existed would otherwise keep its trust level forever, because
     // the upsert keys on source and the source is what carries trust.
@@ -95,8 +117,12 @@ export async function ingestOwnWriting(
     // A voice-trust row for something whose source would normally be evidence:
     // 'note' is the vehicle, because trust is derived from source and nothing
     // may pass a trust level in directly.
+    const effective: DocumentSource = attended ? source : 'note';
+    if (!seen.has(effective)) seen.set(effective, new Set());
+    seen.get(effective)!.add(externalId);
+
     const saved = await addDocument(
-      { accountId, source: attended ? source : 'note', text, externalId },
+      { accountId, source: effective, text, externalId, authorship },
       db,
     );
     if (!saved) return;
@@ -131,9 +157,15 @@ export async function ingestOwnWriting(
       // A repost is someone else's writing however it got there.
       if (p.isRepost) continue;
       const decided = ourPosts.has(p.urn) ? ourPosts.get(p.urn) : ourPostsByText.get(key(p.text));
-      const attended = decided === undefined || decided === 'user';
-      await store('linkedin_post', p.text, p.urn, attended);
+      if (decided === undefined) result.provenance.theirs++;
+      else {
+        result.provenance.ours++;
+        if (decided === 'user') result.provenance.sentByUser++;
+        else result.provenance.sentByTimer++;
+      }
+      await store('linkedin_post', p.text, p.urn, authorshipOf(decided));
     }
+    fetched.add('linkedin_post');
   } catch (err) {
     console.warn('[ingest] could not read own posts', err);
   }
@@ -183,11 +215,30 @@ export async function ingestOwnWriting(
       // common case for anything sent before the decider was preserved.
       // Treating unknown as human is the same fail-open that let machine text
       // become citable in the first place.
-      const attended = decided === undefined || decided === 'user';
-      await store('linkedin_comment', c.text, c.id, attended);
+      await store('linkedin_comment', c.text, c.id, authorshipOf(decided));
     }
+    fetched.add('linkedin_comment');
   } catch (err) {
     console.warn('[ingest] could not read own comments', err);
+  }
+
+  // Prune, but only for sources whose fetch actually succeeded. Pruning after
+  // a provider failure would empty the bank because nothing was seen, which is
+  // a far worse outcome than a stale row.
+  for (const source of fetched) {
+    const ids = [...(seen.get(source) ?? new Set<string>())];
+    const placeholders = ids.map(() => '?').join(',');
+    const removed = db
+      .prepare(
+        `DELETE FROM documents
+          WHERE account_id = ? AND source = ?
+            ${ids.length > 0 ? `AND external_id NOT IN (${placeholders})` : ''}`,
+      )
+      .run(accountId, source, ...ids);
+    if (removed.changes > 0) {
+      console.log(`[ingest] pruned ${removed.changes} stale ${source} document(s)`);
+      result.pruned += removed.changes;
+    }
   }
 
   result.evidenceTotal = (await evidenceCount(accountId, db)).evidence;

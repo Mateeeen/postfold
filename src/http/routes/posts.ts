@@ -62,14 +62,14 @@ postsRouter.get(
       return res.json({ posts: [], reason: 'The account owner is not known yet.' });
     }
 
-    const authored = await getProvider().listAuthoredPosts({
+    const page = await getProvider().listAuthoredPosts({
       providerAccountId: account.providerAccountId,
       providerPersonId: account.ownerPersonId,
       limit: 20,
     });
 
     res.json({
-      posts: authored.map((p) => ({
+      posts: page.items.map((p) => ({
         urn: p.urn,
         text: p.text,
         isRepost: p.isRepost,

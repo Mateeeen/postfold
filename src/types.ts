@@ -254,7 +254,7 @@ export interface Action {
  * Invites (the acceptance-rate signal)
  * ------------------------------------------------------------------ */
 
-export type InviteStatus = 'sent' | 'accepted' | 'withdrawn' | 'expired';
+export type InviteStatus = 'sent' | 'accepted' | 'declined' | 'withdrawn' | 'expired';
 
 export interface Invite {
   id: string;

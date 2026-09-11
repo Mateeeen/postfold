@@ -92,6 +92,19 @@ export interface FoundPost {
  * else's words are a usable sample of your voice is a drafting decision, and
  * this seam does not make drafting decisions.
  */
+/**
+ * A page of results, and whether it is all of them.
+ *
+ * `complete` is not "the call succeeded". A paginated fetch that returns page
+ * one and then stops has succeeded while showing a fraction of the material,
+ * and a caller that prunes what it no longer sees would delete valid evidence
+ * on the strength of that. Anything destructive must key on completeness.
+ */
+export interface Page<T> {
+  items: T[];
+  complete: boolean;
+}
+
 /** A comment written by the account owner. */
 export interface AuthoredComment {
   /** Provider comment id. Matched against what we posted to tell them apart. */
@@ -187,7 +200,7 @@ export interface SocialProvider {
     providerAccountId: string;
     providerPersonId: string;
     limit: number;
-  }): Promise<AuthoredPost[]>;
+  }): Promise<Page<AuthoredPost>>;
 
   /**
    * Comments this person wrote, newest first. Read-only.
@@ -200,7 +213,7 @@ export interface SocialProvider {
     providerAccountId: string;
     providerPersonId: string;
     limit: number;
-  }): Promise<AuthoredComment[]>;
+  }): Promise<Page<AuthoredComment>>;
 
   /** Reply to someone else's post. */
   postComment(input: PostCommentInput): Promise<PostCommentResult>;

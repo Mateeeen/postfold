@@ -194,6 +194,8 @@ export function draftReplyNote(input: {
 export interface PollAcceptanceResult {
   checked: number;
   accepted: number;
+  /** Resolved as refused. Tracked apart from withdrawals on purpose. */
+  declined: number;
   gaveUp: number;
 }
 
@@ -241,7 +243,8 @@ export async function pollAcceptance(
       ? rows.filter((r) => input.inviteIds!.includes(r.id))
       : rows;
 
-  const result: PollAcceptanceResult = { checked: 0, accepted: 0, gaveUp: 0 };
+  const result: PollAcceptanceResult = { checked: 0, accepted: 0,
+    declined: 0, gaveUp: 0 };
   if (targets.length === 0) return result;
 
   // ONE call tells us everything still outstanding, rather than a profile
@@ -301,9 +304,16 @@ export async function pollAcceptance(
         );
         if (changed) result.accepted++;
       } else {
+        // Declined, not withdrawn. Both are resolved-and-not-accepted so the
+        // arithmetic is identical, but they mean opposite things: a withdrawal
+        // is our own housekeeping, a decline is the market telling us
+        // something about who we are asking. Writing one for the other
+        // destroys the only signal that separates "targeting badly" from
+        // "tidied up".
         db.prepare(
-          `UPDATE invites SET status = 'withdrawn', last_checked_at = ? WHERE id = ?`,
+          `UPDATE invites SET status = 'declined', last_checked_at = ? WHERE id = ?`,
         ).run(nowIso(), row.id);
+        result.declined++;
       }
     } catch (err) {
       console.warn(`[poll] could not confirm ${row.provider_person_id}`, err);

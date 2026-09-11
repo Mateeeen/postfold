@@ -124,8 +124,8 @@ describe('enqueue: idempotency', () => {
 
 describe('enqueue: budget enforcement', () => {
   it('counts pending work against the cap and refuses over it', async () => {
-    // Day 1: cap is 5. Nothing has been sent, so all five must come from the
-    // pending count alone.
+    // Day 1: ladder rung 5, unrated multiplier 0.6, so the cap is 3. Nothing
+    // has been sent, so all three must come from the pending count alone.
     const f = await setup({ connectedDaysAgo: 0 });
 
     const outcomes: boolean[] = [];
@@ -142,10 +142,10 @@ describe('enqueue: budget enforcement', () => {
       outcomes.push(result.ok);
     }
 
-    expect(outcomes).toEqual([true, true, true, true, true, false, false, false]);
+    expect(outcomes).toEqual([true, true, true, false, false, false, false, false]);
 
     const count = f.db.prepare('SELECT COUNT(*) AS n FROM actions').get() as { n: number };
-    expect(count.n).toBe(5);
+    expect(count.n).toBe(3);
   });
 
   it('returns the policy reason verbatim when it refuses', async () => {
@@ -175,7 +175,7 @@ describe('enqueue: budget enforcement', () => {
     expect(result.ok).toBe(false);
     if (result.ok) return;
     // This string is shown to the user unmodified, as the body of a 409.
-    expect(result.reason).toMatch(/Daily invite limit reached \(5 on warm-up day 1\)/);
+    expect(result.reason).toMatch(/Daily invite limit reached \(3 on warm-up day 1\)/);
     expect(result.reason).toMatch(/queue count toward this/);
   });
 

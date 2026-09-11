@@ -122,6 +122,15 @@ export const LIMITS = {
    * grounded, so autopilot would never fire and would read as broken rather
    * than as unqualified.
    */
+  /**
+   * TODO: replace with groundedDraftRate once it has real data.
+   *
+   * Document count is a proxy and this number is a guess. What actually
+   * matters is whether retrieval can fill gaps for this user, and three dense
+   * technical posts may ground more drafts than eight one-liners. When the
+   * rate has a sample worth trusting, switch the unlock to it and keep this
+   * only as a floor.
+   */
   AUTOPILOT_MIN_EVIDENCE_DOCS: 5,
 
   /* --- Quality gate -------------------------------------------------- *
@@ -210,6 +219,16 @@ export const LIMITS = {
 
   /** Below this many settled invites we do not trust the acceptance rate. */
   ACCEPTANCE_MIN_SAMPLE: 20,
+  /** Cap multiplier before there is enough resolved data to judge. */
+  UNRATED_MULTIPLIER: 0.6,
+  /**
+   * Outstanding invites at which sending stops regardless of acceptance.
+   *
+   * A large unanswered pile is its own negative signal: it means we are
+   * asking faster than anyone is answering, which the rate cannot see because
+   * pending is excluded from it.
+   */
+  MAX_PENDING_INVITES: 120,
   ACCEPTANCE_LOOKBACK_DAYS: 14,
 
   MAX_ATTEMPTS: 5,
@@ -354,7 +373,10 @@ export function acceptanceBand(
   sample: number,
 ): { band: AcceptanceBand; multiplier: number } {
   if (rate === null || sample < LIMITS.ACCEPTANCE_MIN_SAMPLE) {
-    return { band: 'unrated', multiplier: 1 };
+    // Not 1.0. Full cap while we know nothing is the same permissive default
+    // that let unverified material count as the user's own writing, in a
+    // different file: the absence of a bad signal is not a good one.
+    return { band: 'unrated', multiplier: LIMITS.UNRATED_MULTIPLIER };
   }
   for (const b of ACCEPTANCE_BANDS) {
     if (rate >= b.minRate) return { band: b.band, multiplier: b.multiplier };
@@ -389,6 +411,8 @@ export interface BudgetInput {
   isPremium?: boolean | null;
   /** Note-bearing invites sent in the trailing 30 days. */
   invitesWithNoteLast30d?: number;
+  /** Invites awaiting an answer. Its own stop, separate from the rate. */
+  pendingInvites?: number;
   /** Whether the invite being considered carries a note. */
   usesNote?: boolean;
 }
@@ -518,6 +542,20 @@ export function budget(input: BudgetInput): BudgetResult {
   }
   if (input.status === 'paused') {
     return result(false, input.pausedReason ?? 'This account is paused.');
+  }
+
+  // The unanswered pile. A different question from the rate: that one asks how
+  // the answered invites went, this asks whether anyone is answering at all. A
+  // healthy-looking rate over twelve resolved invites says nothing about the
+  // hundred still waiting, and the rate cannot see them because pending is
+  // excluded from it by construction.
+  if (isInvite && (input.pendingInvites ?? 0) >= LIMITS.MAX_PENDING_INVITES) {
+    return result(
+      false,
+      `${input.pendingInvites} invitations are still waiting for an answer. `
+        + 'Sending more while that many are outstanding is the pattern the platform '
+        + 'reads as spraying. This clears as they resolve.',
+    );
   }
 
   if (isComment && band === 'critical') {

@@ -12,7 +12,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { getAcceptance, updateAccount } from '../src/db/accounts.js';
 import { listSuggestions, recordInviteSent, upsertPerson } from '../src/db/content.js';
 import { draftReplyNote, pollAcceptance, scoreReply, syncReplies } from '../src/replies.js';
-import { LIMITS } from '../src/policy.js';
+import { acceptanceBand, LIMITS } from '../src/policy.js';
 import { FakeProvider } from '../src/providers/fake.js';
 import { fixture } from './helpers.js';
 import type { Fixture } from './helpers.js';
@@ -207,7 +207,7 @@ describe('pollAcceptance', () => {
     expect(acceptance.accepted).toBe(1);
   });
 
-  it('marks an invite that vanished without connecting as withdrawn', async () => {
+  it('marks an invite that vanished without connecting as declined', async () => {
     // Gone from the pending list but not a connection means declined or
     // withdrawn. It must not count as an acceptance.
     const f = (current = await fixture());
@@ -218,7 +218,9 @@ describe('pollAcceptance', () => {
     const r = await pollAcceptance({ accountId: f.account.id }, provider, f.db);
     expect(r.accepted).toBe(0);
     const row = f.db.prepare('SELECT status FROM invites').get() as { status: string };
-    expect(row.status).toBe('withdrawn');
+    // Declined, not withdrawn: a withdrawal is our housekeeping, a decline
+      // is the market answering. Same arithmetic, opposite diagnosis.
+      expect(row.status).toBe('declined');
   });
 
   it('uses one list call rather than a profile lookup per invite', async () => {
@@ -274,5 +276,105 @@ describe('pollAcceptance', () => {
       last_checked_at: string | null;
     };
     expect(row.last_checked_at).not.toBeNull();
+  });
+});
+
+/* ================================================================== *
+ * The failures that silently zero an acceptance rate
+ * ================================================================== */
+
+describe('reconciliation resolves nothing it cannot prove', () => {
+  /** One invite, sent and unanswered. Returns its row id. */
+  async function pending(f: Fixture, who: string): Promise<string> {
+    const person = await upsertPerson(
+      f.account.id,
+      { providerPersonId: who, name: 'Invitee', headline: null, profileUrl: null, avatarUrl: null },
+      f.db,
+    );
+    f.db
+      .prepare(
+        `INSERT INTO actions (id, account_id, kind, status, payload, scheduled_at,
+           dedupe_key, created_at, updated_at)
+         VALUES (?, ?, 'send_invite', 'done', '{}', datetime('now'), ?, datetime('now'), datetime('now'))`,
+      )
+      .run(`act-${who}`, f.account.id, `k-${who}`);
+    await recordInviteSent(
+      {
+        accountId: f.account.id,
+        personId: person.id,
+        actionId: `act-${who}`,
+        providerInviteId: 'inv',
+        sentAt: new Date(),
+        withNote: true,
+      },
+      f.db,
+    );
+    const row = f.db
+      .prepare('SELECT id FROM invites WHERE account_id = ? AND person_id = ?')
+      .get(f.account.id, person.id) as { id: string };
+    return row.id;
+  }
+
+  it('resolves NOTHING when the provider throws', async () => {
+    // The dangerous refactor: treat an API error as "none of these are pending
+    // any more", conclude everyone declined, zero the acceptance rate and
+    // hard-stop a healthy account. Nothing may move on an error.
+    const f = await fixture();
+    try {
+      await pending(f, 'thrower-1');
+      await pending(f, 'thrower-2');
+
+      const provider = new FakeProvider(silent);
+      provider.listSentInvitations = async () => {
+        throw new Error('provider is having a day');
+      };
+
+      await pollAcceptance({ accountId: f.account.id }, provider, f.db);
+
+      const rows = f.db
+        .prepare('SELECT status FROM invites WHERE account_id = ?')
+        .all(f.account.id) as { status: string }[];
+      expect(rows).toHaveLength(2);
+      expect(rows.every((r) => r.status === 'sent')).toBe(true);
+
+      const acc = await getAcceptance(f.account.id, f.db);
+      expect(acc.sample).toBe(0);
+      expect(acc.rate).toBeNull();
+    } finally {
+      f.db.close();
+    }
+  });
+
+  it('reads fresh pending invites as unrated, never as zero acceptance', async () => {
+    // 40 sent, none answered. Under accepted/sent that is 0% and a hard stop
+    // on an account that has done nothing wrong.
+    const f = await fixture();
+    try {
+      for (let i = 0; i < 40; i++) await pending(f, `waiting-${i}`);
+
+      const acc = await getAcceptance(f.account.id, f.db);
+      expect(acc.sample).toBe(0);
+      expect(acc.rate).toBeNull();
+      expect(acceptanceBand(acc.rate, acc.sample).band).toBe('unrated');
+    } finally {
+      f.db.close();
+    }
+  });
+
+  it('counts a decline as resolved and not accepted', async () => {
+    const f = await fixture();
+    try {
+      const a = await pending(f, 'said-yes');
+      const d = await pending(f, 'said-no');
+      f.db.prepare("UPDATE invites SET status = 'accepted' WHERE id = ?").run(a);
+      f.db.prepare("UPDATE invites SET status = 'declined' WHERE id = ?").run(d);
+
+      const acc = await getAcceptance(f.account.id, f.db);
+      expect(acc.sample).toBe(2);
+      expect(acc.accepted).toBe(1);
+      expect(acc.rate).toBe(0.5);
+    } finally {
+      f.db.close();
+    }
   });
 });

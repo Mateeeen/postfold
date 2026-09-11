@@ -16,6 +16,7 @@ import { ProviderError } from '../provider.js';
 import type {
   AuthoredComment,
   AuthoredPost,
+  Page,
   AccountHealth,
   FoundPost,
   ExistingComment,
@@ -200,10 +201,12 @@ export class FakeProvider implements SocialProvider {
     providerAccountId: string;
     providerPersonId: string;
     limit: number;
-  }): Promise<AuthoredComment[]> {
+  }): Promise<Page<AuthoredComment>> {
     this.record('listAuthoredComments', input);
-    if (this.authoredComments) return this.authoredComments.slice(0, input.limit);
-    return [
+    if (this.authoredComments) {
+      return { items: this.authoredComments.slice(0, input.limit), complete: true };
+    }
+    const items = [
       {
         id: 'fake-comment-ours',
         text: 'A comment this product posted on their behalf.',
@@ -216,17 +219,20 @@ export class FakeProvider implements SocialProvider {
         postUrn: 'urn:fake:post:2',
         postedAt: new Date(),
       },
-    ].slice(0, input.limit);
+    ];
+    return { items: items.slice(0, input.limit), complete: true };
   }
 
   async listAuthoredPosts(input: {
     providerAccountId: string;
     providerPersonId: string;
     limit: number;
-  }): Promise<AuthoredPost[]> {
+  }): Promise<Page<AuthoredPost>> {
     this.record('listAuthoredPosts', input);
-    if (this.authoredPosts) return this.authoredPosts.slice(0, input.limit);
-    return [
+    if (this.authoredPosts) {
+      return { items: this.authoredPosts.slice(0, input.limit), complete: true };
+    }
+    const items = [
       {
         urn: 'urn:fake:post:own',
         postUrl: null,
@@ -247,7 +253,8 @@ export class FakeProvider implements SocialProvider {
         reactions: 0,
         comments: 0,
       },
-    ].slice(0, input.limit);
+    ];
+    return { items: items.slice(0, input.limit), complete: true };
   }
 
   async getPostComments(input: {

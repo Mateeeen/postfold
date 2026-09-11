@@ -124,8 +124,12 @@ describe('acceptanceBand', () => {
 
   it('refuses to judge below the minimum sample', () => {
     // A new account with 2 sent and 0 accepted is new, not a spammer.
-    expect(acceptanceBand(0, sample - 1)).toEqual({ band: 'unrated', multiplier: 1 });
-    expect(acceptanceBand(0.9, sample - 1)).toEqual({ band: 'unrated', multiplier: 1 });
+    // 0.6, not 1. Full cap while we know nothing is the same permissive
+    // default that let unverified material count as the user's own writing:
+    // the absence of a bad signal is not a good one.
+    const unrated = { band: 'unrated', multiplier: LIMITS.UNRATED_MULTIPLIER };
+    expect(acceptanceBand(0, sample - 1)).toEqual(unrated);
+    expect(acceptanceBand(0.9, sample - 1)).toEqual(unrated);
   });
 
   it('treats a null rate as unrated', () => {
@@ -147,13 +151,16 @@ describe('acceptanceBand', () => {
  * ================================================================== */
 
 describe('budget: warm-up days', () => {
+  // Ladder cap x the unrated multiplier. A brand-new account has no resolved
+  // invites, so it is unrated, and unrated is 0.6 - not full cap. The ladder
+  // rungs are 5/10/15/20/25; what an unrated account actually gets is these.
   it.each([
-    [1, 5],
-    [4, 10],
-    [8, 15],
-    [15, 20],
-    [22, 25],
-  ])('day %i allows %i invites', (day, expectedCap) => {
+    [1, 3],
+    [4, 6],
+    [8, 9],
+    [15, 12],
+    [22, 15],
+  ])('day %i allows %i invites while unrated', (day, expectedCap) => {
     const now = new Date('2025-06-11T12:00:00Z');
     const result = budget(
       baseBudgetInput({ now, connectedAt: new Date(now.getTime() - (day - 1) * DAY) }),
@@ -240,9 +247,11 @@ describe('budget: counting', () => {
   it('counts pending work against the cap', () => {
     // Otherwise a user approves 40 suggestions in a minute and the queue
     // happily promises to send all of them.
-    const result = budget(baseBudgetInput({ sentLast24h: 5, pendingSameKind: 10 }));
-    expect(result.cap).toBe(25);
-    expect(result.remaining).toBe(10);
+    // Cap is 15: the mature ladder rung of 25 at the unrated 0.6. Five sent
+    // and five promised leaves five, not ten - the promise is what matters.
+    const result = budget(baseBudgetInput({ sentLast24h: 5, pendingSameKind: 5 }));
+    expect(result.cap).toBe(15);
+    expect(result.remaining).toBe(5);
     expect(result.allowed).toBe(true);
   });
 
@@ -277,15 +286,24 @@ describe('budget: overrides', () => {
     // An override is a safety valve, not a bypass.
     const result = budget(
       baseBudgetInput({
-        connectedAt: new Date('2025-06-11T12:00:00Z'), // day 1, cap 5
+        connectedAt: new Date('2025-06-11T12:00:00Z'), // day 1, ladder 5
         dailyCapOverride: { send_invite: 500 },
       }),
     );
-    expect(result.cap).toBe(5);
+    // 3, not 5: the ladder rung throttled by the unrated multiplier. An
+    // override cannot climb past either of them.
+    expect(result.cap).toBe(3);
   });
 
   it('cannot raise a cap above the hard ceiling on a mature account', () => {
-    const result = budget(baseBudgetInput({ dailyCapOverride: { send_invite: 9999 } }));
+    // Rated healthy, so the band is not what limits this - the ceiling is.
+    const result = budget(
+      baseBudgetInput({
+        acceptanceRate: 0.8,
+        acceptanceSample: LIMITS.ACCEPTANCE_MIN_SAMPLE,
+        dailyCapOverride: { send_invite: 9999 },
+      }),
+    );
     expect(result.cap).toBe(LIMITS.HARD_DAILY_INVITE_CAP);
   });
 

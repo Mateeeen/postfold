@@ -76,12 +76,12 @@ async function authorContext(
   let samples: string[] = [];
   if (account.ownerPersonId) {
     try {
-      const authored = await provider.listAuthoredPosts({
+      const page = await provider.listAuthoredPosts({
         providerAccountId: account.providerAccountId,
         providerPersonId: account.ownerPersonId,
         limit: VOICE_SAMPLES * 2,
       });
-      samples = authored
+      samples = page.items
         // A repost is someone else's writing. As a voice sample it teaches
         // the drafter to imitate the wrong person.
         .filter((p) => !p.isRepost && p.text.trim() !== '')

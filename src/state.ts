@@ -126,6 +126,7 @@ export async function getAccountState(
       dailyCapOverride: account.dailyCapOverride,
       isPremium: account.isPremium,
       invitesWithNoteLast30d: usage.invitesWithNoteLast30d,
+      pendingInvites: usage.pendingInvites,
     });
     caps[kind] = toView(decision);
     if (kind === 'send_invite') {

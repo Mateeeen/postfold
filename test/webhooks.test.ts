@@ -156,7 +156,11 @@ describe('handleEvent: acceptance', () => {
 
   it('moves the acceptance rate', async () => {
     const f = await withSentInvite();
-    expect((await getAcceptance(f.account.id, f.db)).rate).toBe(0);
+    // Null, not 0. One invite sent and none resolved is UNDECIDED, and
+    // reading it as 0% acceptance is what hard-stops healthy accounts that
+    // have simply sent faster than people answer.
+    expect((await getAcceptance(f.account.id, f.db)).rate).toBeNull();
+    expect((await getAcceptance(f.account.id, f.db)).sample).toBe(0);
 
     const outcome = await handleEvent(
       {

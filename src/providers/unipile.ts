@@ -19,6 +19,7 @@ import type {
   AccountOwner,
   AuthoredComment,
   AuthoredPost,
+  Page,
   ConnectableAccount,
   PendingInvitation,
   ExistingComment,
@@ -621,7 +622,7 @@ export class UnipileProvider implements SocialProvider {
     providerAccountId: string;
     providerPersonId: string;
     limit: number;
-  }): Promise<AuthoredComment[]> {
+  }): Promise<Page<AuthoredComment>> {
     const res = await this.request<UnipileList<UnipileAuthoredComment>>(
       `/api/v1/users/${encodeURIComponent(input.providerPersonId)}/comments`,
       {
@@ -633,7 +634,7 @@ export class UnipileProvider implements SocialProvider {
       },
     );
 
-    return (res.items ?? [])
+    const items = (res.items ?? [])
       .filter((c) => (c.text ?? '').trim() !== '' && typeof c.id === 'string')
       .map((c) => ({
         id: c.id as string,
@@ -641,13 +642,15 @@ export class UnipileProvider implements SocialProvider {
         postUrn: c.post_urn ?? c.post_id ?? null,
         postedAt: c.date ? new Date(c.date) : null,
       }));
+    // A cursor means the platform is holding more back.
+    return { items, complete: !res.cursor };
   }
 
   async listAuthoredPosts(input: {
     providerAccountId: string;
     providerPersonId: string;
     limit: number;
-  }): Promise<AuthoredPost[]> {
+  }): Promise<Page<AuthoredPost>> {
     const res = await this.request<UnipileList<UnipileAuthoredPost>>(
       `/api/v1/users/${encodeURIComponent(input.providerPersonId)}/posts`,
       {
@@ -659,7 +662,7 @@ export class UnipileProvider implements SocialProvider {
       },
     );
 
-    return (res.items ?? [])
+    const items = (res.items ?? [])
       .filter((p) => (p.text ?? '').trim() !== '')
       .map((p) => ({
         urn: p.social_id ?? (p.id ? toPostUrn(p.id) : ''),
@@ -673,6 +676,7 @@ export class UnipileProvider implements SocialProvider {
         reactions: p.reaction_counter ?? 0,
         comments: p.comment_counter ?? 0,
       }));
+    return { items, complete: !res.cursor };
   }
 
   async getPostComments(input: {

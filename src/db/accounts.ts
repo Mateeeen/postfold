@@ -286,6 +286,8 @@ export interface AccountUsage {
   acceptanceSample: number;
   /** Note-bearing invites in the trailing 30 days — the free-tier ceiling. */
   invitesWithNoteLast30d: number;
+  /** Invites awaiting an answer. Its own stop, separate from the rate. */
+  pendingInvites: number;
 }
 
 /**
@@ -316,6 +318,9 @@ export async function getUsage(
     .get(accountId, kind) as { n: number };
 
   const acceptance = await getAcceptance(accountId, db);
+  const pending2 = db
+    .prepare(`SELECT COUNT(*) AS n FROM invites WHERE account_id = ? AND status = 'sent'`)
+    .get(accountId) as { n: number };
 
   const withNote = db
     .prepare(
@@ -337,6 +342,7 @@ export async function getUsage(
     acceptanceRate: acceptance.rate,
     acceptanceSample: acceptance.sample,
     invitesWithNoteLast30d: withNote.n + (backfill?.n ?? 0),
+    pendingInvites: pending2.n,
   };
 }
 
@@ -346,10 +352,31 @@ export interface Acceptance {
   accepted: number;
 }
 
+/**
+ * Invites still awaiting an answer.
+ *
+ * A large unanswered pile is its own negative signal, independent of how the
+ * resolved ones landed - and it is invisible to the acceptance rate by
+ * construction, since pending is excluded from that entirely.
+ */
+export async function pendingInviteCount(
+  accountId: string,
+  db: Db = getDb(),
+): Promise<number> {
+  const row = db
+    .prepare(`SELECT COUNT(*) AS n FROM invites WHERE account_id = ? AND status = 'sent'`)
+    .get(accountId) as { n: number };
+  return row.n;
+}
+
 export async function getAcceptance(
   accountId: string,
   db: Db = getDb(),
 ): Promise<Acceptance> {
+  // RESOLVED only. An invite still sitting at 'sent' is undecided, not
+  // refused, and counting it as a failure is how 40 fresh invites read as 0%
+  // acceptance and hard-stop a perfectly healthy account. Withdrawn counts as
+  // resolved-not-accepted: we asked, and the asking ended.
   const row = db
     .prepare(
       `SELECT
@@ -357,6 +384,7 @@ export async function getAcceptance(
          COUNT(*) FILTER (WHERE status = 'accepted') AS accepted
        FROM invites
        WHERE account_id = ?
+         AND status IN ('accepted', 'declined', 'expired', 'withdrawn')
          AND sent_at >= datetime('now', ?)`,
     )
     .get(accountId, `-${LIMITS.ACCEPTANCE_LOOKBACK_DAYS} days`) as {

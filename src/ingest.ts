@@ -148,12 +148,12 @@ export async function ingestOwnWriting(
   }
 
   try {
-    const authored = await provider.listAuthoredPosts({
+    const page = await provider.listAuthoredPosts({
       providerAccountId: account.providerAccountId,
       providerPersonId: account.ownerPersonId,
       limit: 20,
     });
-    for (const p of authored) {
+    for (const p of page.items) {
       // A repost is someone else's writing however it got there.
       if (p.isRepost) continue;
       const decided = ourPosts.has(p.urn) ? ourPosts.get(p.urn) : ourPostsByText.get(key(p.text));
@@ -165,7 +165,8 @@ export async function ingestOwnWriting(
       }
       await store('linkedin_post', p.text, p.urn, authorshipOf(decided));
     }
-    fetched.add('linkedin_post');
+    if (page.complete) fetched.add('linkedin_post');
+    else console.warn('[ingest] posts page incomplete — skipping prune for this source');
   } catch (err) {
     console.warn('[ingest] could not read own posts', err);
   }
@@ -193,12 +194,12 @@ export async function ingestOwnWriting(
   }
 
   try {
-    const comments = await provider.listAuthoredComments({
+    const page = await provider.listAuthoredComments({
       providerAccountId: account.providerAccountId,
       providerPersonId: account.ownerPersonId,
       limit: 50,
     });
-    for (const c of comments) {
+    for (const c of page.items) {
       const byId = ourComments.has(c.id);
       const decided = byId ? ourComments.get(c.id) : ourComments.get(key(c.text));
       if (decided === undefined) result.provenance.theirs++;
@@ -217,14 +218,17 @@ export async function ingestOwnWriting(
       // become citable in the first place.
       await store('linkedin_comment', c.text, c.id, authorshipOf(decided));
     }
-    fetched.add('linkedin_comment');
+    if (page.complete) fetched.add('linkedin_comment');
+    else console.warn('[ingest] comments page incomplete — skipping prune for this source');
   } catch (err) {
     console.warn('[ingest] could not read own comments', err);
   }
 
-  // Prune, but only for sources whose fetch actually succeeded. Pruning after
-  // a provider failure would empty the bank because nothing was seen, which is
-  // a far worse outcome than a stale row.
+  // Prune only where the fetch was COMPLETE, not merely successful. A
+  // paginated read that returns page one and stops has succeeded while showing
+  // a fraction of the material; pruning on that would delete valid evidence,
+  // silently revert autopilot, and tell the user they are short items they
+  // actually have. A stale row is a far cheaper mistake.
   for (const source of fetched) {
     const ids = [...(seen.get(source) ?? new Set<string>())];
     const placeholders = ids.map(() => '?').join(',');

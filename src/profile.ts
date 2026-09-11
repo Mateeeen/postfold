@@ -38,12 +38,12 @@ export async function refreshOwnerProfile(
   if (owner.providerPersonId) {
     try {
       const since = Date.now() - 7 * 24 * 60 * 60 * 1000;
-      const authored = await getProvider().listAuthoredPosts({
+      const page = await getProvider().listAuthoredPosts({
         providerAccountId: account.providerAccountId,
         providerPersonId: owner.providerPersonId,
         limit: 25,
       });
-      const recent = authored.filter(
+      const recent = page.items.filter(
         (p) => !p.isRepost && p.postedAt !== null && p.postedAt.getTime() >= since,
       );
       impressions7d = recent.reduce((n, p) => n + p.impressions, 0);

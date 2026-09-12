@@ -242,7 +242,18 @@ export const LIMITS = {
    * account survives - it is about how much goes out under someone's name
    * before a lagging signal catches a problem. Invites resolve over days.
    * -------------------------------------------------------------------- */
-  AUTO_DAILY_POST_CAP: 1,
+/* --- Autopilot unlocks ---------------------------------------------- *
+   * Autopilot is earned, not toggled. Each condition exists because there is
+   * a specific thing we cannot know until it is met.
+   * -------------------------------------------------------------------- */
+  /** Nothing runs unattended in the first week, whatever else is true. */
+  AUTOPILOT_MIN_DAY: 7,
+  /** Drafts scoring strong before posts or comments may run themselves. */
+  AUTOPILOT_MIN_STRONG_DRAFTS: 3,
+  /** Resolved invitations before the acceptance rate means anything. */
+  AUTOPILOT_MIN_RESOLVED_INVITES: 20,
+
+    AUTO_DAILY_POST_CAP: 1,
   AUTO_DAILY_COMMENT_CAP: 8,
   AUTO_DAILY_CONNECT_CAP: 8,
   /**

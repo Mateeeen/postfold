@@ -12,7 +12,7 @@
  * for connection requests, which can never be auto-approved.
  */
 
-import { readiness } from './readiness.js';
+import { autopilotUnlock } from './unlock.js';
 import { evidenceMaterial, voiceSamples } from './db/documents.js';
 import {
   applyRetrieved,
@@ -368,7 +368,7 @@ export async function draftPost(
     kind: 'post',
     mode: account.automationModes.post,
     band: acceptanceBand(acceptance.rate, acceptance.sample).band,
-    unlocked: (await readiness(input.accountId, db)).autopilotReady,
+    unlocked: (await autopilotUnlock(input.accountId, new Date(), db)).post.unlocked,
     consecutiveAutoPosts: await consecutiveAutoPosts(input.accountId, db),
     grounded: !hasOpenGaps(gaps, frame) && isGrounded(gaps),
   });

@@ -16,6 +16,8 @@ import { evidenceCount } from './db/documents.js';
 import type { Db } from './db/index.js';
 import { getDb } from './db/index.js';
 import { LIMITS } from './policy.js';
+import { autopilotUnlock } from './unlock.js';
+import type { UnlockByKind } from './unlock.js';
 
 /**
  * Records whose authorship was destroyed before the decider stopped being
@@ -42,6 +44,8 @@ export interface Readiness {
   /** Written for the user, naming the missing thing. Null when ready. */
   blockedBy: string | null;
   authorshipGap: AuthorshipGap;
+  /** Per-type unlock state, with display-ready progress lines. */
+  unlocks: UnlockByKind;
 }
 
 /**
@@ -149,6 +153,7 @@ export async function readiness(
     fills,
     autopilotReady: ready,
     unattendedDocuments: unattended,
+    unlocks: await autopilotUnlock(accountId, new Date(), db),
     authorshipGap: {
       sentDrafts: drafts.sent,
       sentDraftsWithDecider: drafts.withDecider,

@@ -87,6 +87,16 @@ specific, hard-to-reverse harm to a real person's LinkedIn account.
     is not) and in caps. State the distance in terms of outcomes the user
     cannot manufacture.
 
+14. **Read the table definition before writing SQL against it.**
+    `SELECT sql FROM sqlite_master WHERE name = '<table>'`. Three separate
+    queries in this codebase were written against a remembered schema and were
+    wrong — `invites` had no `responded_at`, `suggestions` has `reason` and
+    `source` rather than `comment_text`, `drafts` gained five columns by
+    `ALTER`. Tests caught all three, which is luck about coverage rather than a
+    safeguard. Columns added by migration do not look like columns in the
+    original `CREATE TABLE`, and nothing in the type system knows the
+    difference.
+
 ## Things that look wrong and are not
 
 - **better-sqlite3 is synchronous, but every DB function is `async`.** The

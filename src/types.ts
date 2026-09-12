@@ -305,7 +305,15 @@ export interface Invite {
 
 export type DraftKind = 'post' | 'comment';
 
-export type DraftStatus = 'pending' | 'approved' | 'queued' | 'dismissed' | 'expired';
+export type DraftStatus =
+  | 'pending'
+  | 'approved'
+  | 'queued'
+  /** A person said no. */
+  | 'dismissed'
+  /** We retired it: written by a generation we stopped trusting. */
+  | 'discarded'
+  | 'expired';
 
 /**
  * Machine-written text awaiting a decision.

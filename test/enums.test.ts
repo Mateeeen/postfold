@@ -51,6 +51,7 @@ const DRAFT_STATUSES: Record<DraftStatus, true> = {
   approved: true,
   queued: true,
   dismissed: true,
+  discarded: true,
   expired: true,
 };
 

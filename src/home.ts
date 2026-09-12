@@ -24,6 +24,7 @@
 import { getAccount } from './db/accounts.js';
 import type { Db } from './db/index.js';
 import { getDb } from './db/index.js';
+import { readiness } from './readiness.js';
 import { autopilotUnlock } from './unlock.js';
 
 export type HomeState = 'needs_you' | 'going_out' | 'sent';
@@ -68,8 +69,20 @@ export interface Digest {
 export interface Home {
   items: HomeItem[];
   digest: Digest | null;
-  /** Per-type autopilot state, so the header can answer "is this on". */
+  /** Per-type autopilot state, so the screen can answer "is this on". */
   autopilot: Awaited<ReturnType<typeof autopilotUnlock>>;
+  /**
+   * The standing facts the queue cannot show, because they are not items.
+   * These are the questions a person should never have to ask: is it on,
+   * what turns it on, how much of my own writing does it have to work from.
+   */
+  standing: {
+    evidenceDocuments: number;
+    /** Held but not citable: sent unattended, or pasted. */
+    voiceDocuments: number;
+    /** Null when the bank is deep enough. */
+    evidenceNeeded: string | null;
+  };
 }
 
 const line = (text: string, max = 110): string => {
@@ -378,9 +391,19 @@ export async function home(
     return a.state === 'sent' ? bt.localeCompare(at) : at.localeCompare(bt);
   });
 
+  const ready = await readiness(accountId, db);
+
   return {
     items,
     digest: digestFor(accountId, now, db),
     autopilot: await autopilotUnlock(accountId, now, db),
+    standing: {
+      evidenceDocuments: ready.evidenceDocuments,
+      voiceDocuments: ready.voiceDocuments,
+      // Its own sentence, separate from the unlock lines: "your notes cannot
+      // be quoted as yours" is a different thing to hear than "write two more
+      // strong drafts".
+      evidenceNeeded: ready.blockedBy,
+    },
   };
 }

@@ -183,6 +183,14 @@ export const LIMITS = {
   Q_COMMENT_RARE_TERMS_FOR_FULL: 3,
 
   /** Never two sends closer together than this, at any budget. */
+  /**
+   * Shortest send window a person may configure.
+   *
+   * Below this the day's budget cannot fit at MIN_GAP_MINUTES apart, so the
+   * scheduler would either bunch sends or push them past closing - the burst
+   * pattern the pacing exists to prevent, arrived at through a settings form.
+   */
+  MIN_WINDOW_HOURS: 4,
   MIN_GAP_MINUTES: 8,
   /** Never spread so thin that a day's budget cannot fit in the window. */
   MAX_GAP_MINUTES: 90,

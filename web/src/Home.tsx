@@ -203,8 +203,12 @@ export function Home({ onOpen, onChanged }: Props): JSX.Element {
   if (error) return <div className="empty">{error}</div>;
   if (!data) return <div className="empty">Loading…</div>;
 
-  const { account, items, digest } = data;
+  const { account, items, digest, autopilot, standing } = data;
   const needs = items.filter((i) => i.state === 'needs_you');
+  // Two stacks, not one. The record is a different kind of thing from the
+  // work, and a divider between them was not enough to say so.
+  const live_ = items.filter((i) => i.state !== 'sent');
+  const sent = items.filter((i) => i.state === 'sent');
 
   return (
     <div className="home">
@@ -262,7 +266,7 @@ export function Home({ onOpen, onChanged }: Props): JSX.Element {
           )}
 
           <div className="rows">
-            {items.map((i) => (
+            {live_.map((i) => (
               <Row
                 key={`${i.kind}-${i.id}`}
                 item={i}
@@ -275,8 +279,100 @@ export function Home({ onOpen, onChanged }: Props): JSX.Element {
               />
             ))}
           </div>
+
+          {sent.length > 0 && (
+            <section className="record">
+              <h2 className="record-head">Already done</h2>
+              <div className="rows">
+                {sent.map((i) => (
+                  <Row
+                    key={`${i.kind}-${i.id}`}
+                    item={i}
+                    now={now}
+                    onOpen={onOpen}
+                    onChanged={() => {
+                      void load();
+                      onChanged();
+                    }}
+                  />
+                ))}
+              </div>
+            </section>
+          )}
         </>
       )}
+
+      <Standing autopilot={autopilot} standing={standing} account={account} />
     </div>
   );
+}
+
+/**
+ * The questions a person should never have to ask, answered in one block.
+ *
+ * Is autopilot on, what turns it on, when does the next thing go out, and how
+ * much of their own writing does this have to work from. None of these are
+ * items, so the queue cannot carry them — and all of them were API-only,
+ * which meant the only way to find out was to ask me.
+ */
+function Standing({
+  autopilot,
+  standing,
+  account,
+}: {
+  autopilot: HomePayload['autopilot'];
+  standing: HomePayload['standing'];
+  account: AccountState;
+}): JSX.Element {
+  const dials: [keyof HomePayload['autopilot'], string][] = [
+    ['post', 'Posts'],
+    ['comment', 'Comments'],
+    ['connect', 'Invitations'],
+  ];
+
+  return (
+    <section className="standing">
+      <div className="standing-head">
+        <h2>Running on its own</h2>
+        {account.nextScheduledAt && (
+          <span className="meta">next out {shortWhen(account.nextScheduledAt)}</span>
+        )}
+      </div>
+
+      <dl className="dials">
+        {dials.map(([key, label]) => {
+          const mode = account.automationModes[key === 'connect' ? 'connect' : key];
+          const state = autopilot[key];
+          const on = mode === 'auto' && state.unlocked;
+          return (
+            <div key={key} className={on ? 'dial on' : 'dial'}>
+              <dt>{label}</dt>
+              <dd>
+                <span className="dial-state">{on ? 'On' : 'You approve each one'}</span>
+                {/* Shown verbatim: it is written as a distance to travel. */}
+                {state.reason && <span className="dial-why">{state.reason}</span>}
+              </dd>
+            </div>
+          );
+        })}
+      </dl>
+
+      <p className="standing-note">
+        Working from <strong>{standing.evidenceDocuments}</strong>{' '}
+        {standing.evidenceDocuments === 1 ? 'piece' : 'pieces'} of your own writing
+        {standing.voiceDocuments > 0 && ` (${standing.voiceDocuments} more can shape the style but not be quoted)`}
+        .{standing.evidenceNeeded ? ` ${standing.evidenceNeeded}` : ''}
+      </p>
+    </section>
+  );
+}
+
+/** "in 2h", "tomorrow". Enough to know whether to wait. */
+function shortWhen(iso: string): string {
+  const mins = Math.round((new Date(iso).getTime() - Date.now()) / 60_000);
+  if (mins <= 0) return 'any moment';
+  if (mins < 60) return `in ${mins}m`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `in ${hours}h`;
+  return hours < 48 ? 'tomorrow' : `in ${Math.floor(hours / 24)}d`;
 }

@@ -163,6 +163,11 @@ export interface AccountPatch {
   isPremium?: boolean | null;
   headline?: string | null;
   automationModes?: AutomationModes;
+  /** Settings a person can change. Window hours are local to `timezone`. */
+  timezone?: string;
+  sendDays?: number[];
+  windowStartHour?: number;
+  windowEndHour?: number;
   /** Repointing at a new provider tenant. See the reconnect route. */
   providerAccountId?: string;
   displayName?: string;
@@ -225,6 +230,22 @@ export async function updateAccount(
   if (patch.displayName !== undefined) {
     sets.push('display_name = @displayName');
     params['displayName'] = patch.displayName;
+  }
+  if (patch.timezone !== undefined) {
+    sets.push('timezone = @timezone');
+    params['timezone'] = patch.timezone;
+  }
+  if (patch.sendDays !== undefined) {
+    sets.push('send_days = @sendDays');
+    params['sendDays'] = encodeJson(patch.sendDays);
+  }
+  if (patch.windowStartHour !== undefined) {
+    sets.push('window_start_hour = @windowStartHour');
+    params['windowStartHour'] = patch.windowStartHour;
+  }
+  if (patch.windowEndHour !== undefined) {
+    sets.push('window_end_hour = @windowEndHour');
+    params['windowEndHour'] = patch.windowEndHour;
   }
   if (patch.automationModes !== undefined) {
     sets.push('automation_modes = @automationModes');

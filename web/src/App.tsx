@@ -17,6 +17,7 @@ import { Drafts } from './Drafts';
 import { Today } from './Today';
 import { Profile } from './Profile';
 import { Home } from './Home';
+import { Settings } from './Settings';
 import { Published } from './Published';
 import { Comments } from './Comments';
 import { Trending } from './Trending';
@@ -26,6 +27,7 @@ export type AppConfig = Config;
 
 type Tab =
   | 'home'
+  | 'settings'
   | 'today'
   | 'compose'
   | 'carousel'
@@ -214,7 +216,15 @@ export function App(): JSX.Element {
     { group: 'Needs you', items: [['drafts', 'Review']] },
     // Unlabelled: two rows do not need a heading to explain them, and a
     // heading per item is how a five-link sidebar starts feeling like a CRM.
-    { group: null, items: [['carousel', 'Carousel'], ['published', 'Your posts'], ['queue', 'Scheduled']] },
+    {
+      group: null,
+      items: [
+        ['carousel', 'Carousel'],
+        ['published', 'Your posts'],
+        ['queue', 'Scheduled'],
+        ['settings', 'Settings'],
+      ],
+    },
   ];
 
   const badge = (id: Tab): number => {
@@ -315,6 +325,10 @@ export function App(): JSX.Element {
 
       <main className="content">
         {fatal && <div className="banner">{fatal}</div>}
+
+      {tab === 'settings' && account && (
+        <Settings account={account} onChanged={() => void refresh()} />
+      )}
 
       {tab === 'home' && (
         <Home

@@ -265,6 +265,82 @@ accountsRouter.post(
   }),
 );
 
+/**
+ * When this account is allowed to act.
+ *
+ * Validated rather than trusted: a window that ends before it starts, or a
+ * timezone the runtime cannot resolve, would silently push every scheduled
+ * action to a time that never arrives. The pacing code assumes these are
+ * sane, so this is where "sane" is enforced.
+ */
+accountsRouter.post(
+  '/api/accounts/:id/settings',
+  asyncHandler(async (req, res) => {
+    const id = param(req, 'id');
+    if (!(await ownsAccount(req, id))) return notFound(res, 'No such account');
+
+    const account = await getAccount(id);
+    if (!account) return notFound(res, 'No such account');
+
+    const patch: {
+      timezone?: string;
+      sendDays?: number[];
+      windowStartHour?: number;
+      windowEndHour?: number;
+    } = {};
+
+    if (req.body?.timezone !== undefined) {
+      const tz = String(req.body.timezone);
+      try {
+        // The only reliable check: ask the runtime to use it.
+        new Intl.DateTimeFormat('en-US', { timeZone: tz }).format(new Date());
+      } catch {
+        return badRequest(res, `Not a timezone this system knows: ${tz}`);
+      }
+      patch.timezone = tz;
+    }
+
+    if (req.body?.sendDays !== undefined) {
+      const days = req.body.sendDays;
+      if (
+        !Array.isArray(days) ||
+        days.some((d: unknown) => typeof d !== 'number' || d < 0 || d > 6)
+      ) {
+        return badRequest(res, 'sendDays must be numbers from 0 (Sunday) to 6.');
+      }
+      if (days.length === 0) {
+        return badRequest(
+          res,
+          'Pick at least one day. With none, nothing would ever send and nothing would say why.',
+        );
+      }
+      patch.sendDays = [...new Set(days as number[])].sort();
+    }
+
+    const start = req.body?.windowStartHour;
+    const end = req.body?.windowEndHour;
+    if (start !== undefined || end !== undefined) {
+      const s = start === undefined ? account.windowStartHour : Number(start);
+      const e = end === undefined ? account.windowEndHour : Number(end);
+      if (!Number.isInteger(s) || !Number.isInteger(e) || s < 0 || e > 24) {
+        return badRequest(res, 'Window hours must be whole hours between 0 and 24.');
+      }
+      if (e - s < LIMITS.MIN_WINDOW_HOURS) {
+        return badRequest(
+          res,
+          `Leave at least ${LIMITS.MIN_WINDOW_HOURS} hours. A shorter window forces sends closer `
+            + 'together than the minimum gap, which is the burst pattern the pacing exists to avoid.',
+        );
+      }
+      patch.windowStartHour = s;
+      patch.windowEndHour = e;
+    }
+
+    await updateAccount(id, patch);
+    res.json(await getAccountState(id));
+  }),
+);
+
 /** Re-read the owner's profile. Cheap, and the avatar URL expires. */
 accountsRouter.post(
   '/api/accounts/:id/refresh-profile',

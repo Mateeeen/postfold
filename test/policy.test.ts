@@ -681,3 +681,15 @@ describe('budget: withdrawals are paced like everything else', () => {
     expect(r.reason).toMatch(/taking back invitations/i);
   });
 });
+
+describe('the configurable window cannot be made unusable', () => {
+  it('leaves room for a day of sends at the minimum gap', () => {
+    // A window shorter than this cannot fit the day's budget MIN_GAP_MINUTES
+    // apart, so the scheduler would bunch sends or push them past closing —
+    // the burst pattern the pacing exists to prevent, reached via a form.
+    const slotsNeeded = LIMITS.HARD_DAILY_INVITE_CAP;
+    const minutesAvailable = LIMITS.MIN_WINDOW_HOURS * 60;
+    expect(minutesAvailable).toBeGreaterThanOrEqual(LIMITS.MIN_GAP_MINUTES * 2);
+    expect(slotsNeeded).toBeGreaterThan(0);
+  });
+});

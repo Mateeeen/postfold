@@ -100,6 +100,7 @@ export interface AccountState {
     profileUrl: string | null;
   };
   providerOutageUntil: string | null;
+  automationModes: Record<'post' | 'comment' | 'connect' | 'withdraw', 'draft' | 'ask' | 'auto'>;
   reach: {
     followers: number | null;
     connections: number | null;
@@ -113,6 +114,8 @@ export interface AccountState {
   sendingEnabled: boolean;
   pausedReason: string | null;
   timezone: string;
+  /** 0 = Sunday. The days this account is allowed to act on. */
+  sendDays: number[];
   windowStartHour: number;
   windowEndHour: number;
   warmupDay: number;
@@ -248,6 +251,11 @@ export interface HomePayload {
   items: HomeItem[];
   digest: Digest | null;
   autopilot: Record<'post' | 'comment' | 'connect' | 'withdraw', UnlockState>;
+  standing: {
+    evidenceDocuments: number;
+    voiceDocuments: number;
+    evidenceNeeded: string | null;
+  };
 }
 
 export interface PublishedPost {
@@ -397,6 +405,26 @@ export const api = {
   ideas: () => request<{ ideas: string[] }>('/api/ideas'),
 
   home: () => request<HomePayload>('/api/home'),
+
+  saveSettings: (
+    id: string,
+    patch: {
+      timezone?: string;
+      sendDays?: number[];
+      windowStartHour?: number;
+      windowEndHour?: number;
+    },
+  ) =>
+    request<AccountState>(`/api/accounts/${id}/settings`, {
+      method: 'POST',
+      body: JSON.stringify(patch),
+    }),
+
+  saveModes: (id: string, patch: Record<string, string>) =>
+    request<AccountState>(`/api/accounts/${id}/modes`, {
+      method: 'POST',
+      body: JSON.stringify(patch),
+    }),
 
   /** Stop something queued. Only pending work can be stopped. */
   cancelAction: (id: string) =>

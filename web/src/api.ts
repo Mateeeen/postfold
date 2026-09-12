@@ -224,6 +224,8 @@ export interface HomeItem {
   unattended: boolean;
   sentAt: string | null;
   outcome: string | null;
+  /** The queued action to cancel when stopping this. Null when nothing to stop. */
+  cancelId: string | null;
 }
 
 export interface Digest {
@@ -395,6 +397,10 @@ export const api = {
   ideas: () => request<{ ideas: string[] }>('/api/ideas'),
 
   home: () => request<HomePayload>('/api/home'),
+
+  /** Stop something queued. Only pending work can be stopped. */
+  cancelAction: (id: string) =>
+    request<{ ok: true }>(`/api/queue/${encodeURIComponent(id)}`, { method: 'DELETE' }),
 
   dismissDigest: (day: string) =>
     request<{ ok: true }>('/api/home/digest/dismiss', {

@@ -46,6 +46,12 @@ export interface HomeItem {
   /** sent: when, and how it turned out. */
   sentAt: string | null;
   outcome: string | null;
+  /**
+   * The queued action behind this row, when there is one. Stopping something
+   * means cancelling the action, and the row's own id is the draft or
+   * suggestion - a different thing that cannot be cancelled.
+   */
+  cancelId: string | null;
 }
 
 export interface Digest {
@@ -85,16 +91,25 @@ interface DraftRow {
   created_at: string;
   decided_at: string | null;
   decided_by: string | null;
+  action_id: string | null;
+  scheduled_at: string | null;
 }
 
 function draftItems(accountId: string, db: Db): HomeItem[] {
+  // The action carries the time it actually sends. decided_at is when the
+  // user said yes, which is in the past by definition — using it produced
+  // "any moment" on everything queued, which is the opposite of a countdown.
   const rows = db
     .prepare(
-      `SELECT id, kind, status, text, auto_approve_at, gaps, created_at,
-              decided_at, decided_by
-         FROM drafts
-        WHERE account_id = ? AND status IN ('pending', 'queued', 'approved')
-        ORDER BY created_at DESC
+      `SELECT d.id, d.kind, d.status, d.text, d.auto_approve_at, d.gaps,
+              d.created_at, d.decided_at, d.decided_by,
+              a.id AS action_id, a.scheduled_at
+         FROM drafts d
+         LEFT JOIN actions a
+           ON a.dedupe_key = ('draft-' || d.kind || ':' || d.id)
+          AND a.status = 'pending'
+        WHERE d.account_id = ? AND d.status IN ('pending', 'queued', 'approved')
+        ORDER BY d.created_at DESC
         LIMIT 60`,
     )
     .all(accountId) as DraftRow[];
@@ -128,6 +143,7 @@ function draftItems(accountId: string, db: Db): HomeItem[] {
         unattended: false,
         sentAt: null,
         outcome: null,
+        cancelId: null,
       };
     }
 
@@ -140,10 +156,11 @@ function draftItems(accountId: string, db: Db): HomeItem[] {
       preview: line(r.text),
       person: null,
       reason: null,
-      goesOutAt: out ? null : r.decided_at,
+      goesOutAt: out ? null : r.scheduled_at,
       unattended: r.decided_by === 'timer',
       sentAt: out ? r.decided_at : null,
       outcome: out ? 'Posted' : null,
+      cancelId: r.action_id,
     };
   });
 }
@@ -192,6 +209,7 @@ function peopleItems(accountId: string, db: Db): HomeItem[] {
       unattended: false,
       sentAt: null,
       outcome: null,
+      cancelId: null,
     });
   }
 
@@ -227,6 +245,7 @@ function peopleItems(accountId: string, db: Db): HomeItem[] {
       unattended: false,
       sentAt: i.sent_at,
       outcome: outcomes[i.status] ?? 'Waiting',
+      cancelId: null,
     });
   }
 
@@ -263,6 +282,7 @@ function queuedItems(accountId: string, db: Db): HomeItem[] {
     unattended: r.kind === 'withdraw_invite',
     sentAt: null,
     outcome: null,
+    cancelId: r.id,
   }));
 }
 

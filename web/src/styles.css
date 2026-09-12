@@ -198,11 +198,14 @@ body {
 /* Centred in the space left by the rail, not pinned to it. Reading a column
    of text hard against a navigation bar with a void on the other side is
    what made this feel unfinished. */
+/* Left-aligned after the rail. Centring in the leftover viewport left a
+   column of dead space beside the navigation and made the page read as
+   unfinished rather than as composed. */
 .content {
   width: 100%;
-  max-width: 760px;
-  margin: 0 auto;
-  padding: 36px 28px 96px;
+  max-width: 720px;
+  margin: 0;
+  padding: 30px 32px 96px;
   box-sizing: border-box;
 }
 
@@ -1501,66 +1504,88 @@ textarea.li-input.post-edit { min-height: 150px; border-radius: var(--radius); }
   color: var(--ink-2);
 }
 
-.rows { display: flex; flex-direction: column; gap: 1px; }
-
-.row {
+.rows {
   display: flex;
-  align-items: center;
-  gap: 12px;
-  width: 100%;
-  text-align: left;
-  font: inherit;
+  flex-direction: column;
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: var(--radius);
-  padding: 12px 14px;
-  cursor: pointer;
+  overflow: hidden;
+}
+
+/* A queue is for scanning. One hairline between rows, no card chrome, and
+   enough of them on screen at once to see the shape of the day. */
+.row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 12px;
+  border-bottom: 1px solid var(--line);
+  background: none;
+  font: inherit;
   color: var(--ink);
 }
 
-.row:hover { border-color: var(--line-2); }
+.row:last-child { border-bottom: none; }
+.row:hover { background: var(--panel-2); }
 
-/* Sent is the record, not the work. It recedes. */
-.row-sent { opacity: 0.62; }
+/* The record recedes. It is there to be found, not read. */
+.row-sent { opacity: 0.45; }
 .row-sent:hover { opacity: 1; }
 
 .row-kind {
-  font-size: 10.5px;
+  font-size: 10px;
   letter-spacing: 0.07em;
   text-transform: uppercase;
   color: var(--muted);
-  min-width: 74px;
+  min-width: 62px;
   flex: none;
 }
 
-.row-body { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+/* The clickable body. A button so the whole line opens the item, inside a
+   row that also carries its own buttons — nesting them would be invalid. */
+.row-open {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
 
 .row-preview {
-  font-size: 13.5px;
-  line-height: 1.4;
+  font-size: 13px;
+  line-height: 1.35;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.row-reason { font-size: 11.5px; color: var(--muted); }
+.row-reason {
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+  flex: none;
+}
 
 .chip-state {
   flex: none;
-  font-size: 11.5px;
+  font-size: 11px;
   border-radius: 999px;
-  padding: 3px 10px;
-  display: flex;
+  padding: 2px 9px;
+  display: inline-flex;
   align-items: baseline;
-  gap: 6px;
+  gap: 5px;
   white-space: nowrap;
 }
 
-.chip-state em {
-  font-style: normal;
-  font-size: 10.5px;
-  opacity: 0.75;
-}
+.chip-state em { font-style: normal; font-size: 10px; opacity: 0.75; }
 
 .chip-state.needs {
   background: var(--primary-soft);
@@ -1570,28 +1595,44 @@ textarea.li-input.post-edit { min-height: 150px; border-radius: var(--radius); }
 
 .chip-state.going { background: var(--panel-2); color: var(--ink-2); }
 
-/* Under two hours, or leaving unattended: the one loud thing on this screen. */
-.chip-state.going.soon { background: var(--magenta-soft); color: var(--magenta); }
+/* Magenta only inside the last half hour. Colouring every countdown made a
+   normal timer read as an error state. */
+.chip-state.going.urgent { background: var(--magenta-soft); color: var(--magenta); }
 
 .chip-state.done { background: transparent; color: var(--muted); }
 
-/* Empty is the resting state of this product, not a failure of it. */
-.empty-home {
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  padding: 40px 28px;
-  text-align: center;
+/* Actions live on the row. Without them this is a status display, not a
+   queue — nothing here can be decided from the list. */
+.row-actions { display: flex; gap: 4px; flex: none; }
+
+.row-act {
+  font: inherit;
+  font-size: 11.5px;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  padding: 3px 9px;
+  color: var(--ink-2);
+  cursor: pointer;
 }
 
-.empty-home h2 { margin: 0 0 8px; font-size: 19px; letter-spacing: -0.01em; }
+.row-act:hover:not(:disabled) { border-color: var(--line-2); color: var(--ink); }
+.row-act:disabled { opacity: 0.4; cursor: not-allowed; }
 
-.empty-home p {
-  margin: 0 auto 18px;
-  max-width: 44ch;
-  color: var(--ink-2);
-  font-size: 14px;
-  line-height: 1.55;
+.row-act.primary {
+  background: var(--primary);
+  color: var(--primary-ink);
+  border-color: var(--primary);
+}
+.row-act.primary:hover:not(:disabled) { filter: brightness(0.94); }
+
+.row-act.stop:hover:not(:disabled) { border-color: var(--magenta); color: var(--magenta); }
+
+.row-error {
+  flex-basis: 100%;
+  font-size: 11.5px;
+  color: var(--magenta);
+  padding-top: 4px;
 }
 
 @media (max-width: 620px) {

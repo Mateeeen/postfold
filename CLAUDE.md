@@ -79,6 +79,14 @@ specific, hard-to-reverse harm to a real person's LinkedIn account.
     `authorship` parameter defaults to `unproven` so that forgetting it fails
     closed rather than open.
 
+13. **Never phrase a progress line so the fastest route to unlocking is the
+    behaviour being throttled.** Invite autopilot unlocks on invitations
+    *answered*, never on invitations *sent* — "8 more to go" beside a Send
+    button makes sending the way to earn the thing that limits sending. The
+    same trap is waiting in warm-up ("3 more days" is fine, "12 more invites"
+    is not) and in caps. State the distance in terms of outcomes the user
+    cannot manufacture.
+
 ## Things that look wrong and are not
 
 - **better-sqlite3 is synchronous, but every DB function is `async`.** The

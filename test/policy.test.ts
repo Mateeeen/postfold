@@ -109,8 +109,9 @@ describe('acceptanceBand', () => {
 
   it.each([
     [1.0, 'healthy', 1],
-    [0.4, 'healthy', 1],
-    [0.39, 'watch', 0.6],
+    // Healthy starts at 30%: the boundary the invite autopilot unlock quotes.
+    [0.3, 'healthy', 1],
+    [0.29, 'watch', 0.6],
     [0.25, 'watch', 0.6],
     [0.24, 'throttled', 0.3],
     [0.15, 'throttled', 0.3],
@@ -177,7 +178,7 @@ describe('budget: acceptance bands throttle invites', () => {
 
   it.each([
     [0.8, 'healthy', 25, true],
-    [0.3, 'watch', 15, true],
+    [0.28, 'watch', 15, true],
     [0.2, 'throttled', 7, true],
     [0.05, 'critical', 0, false],
   ])('rate %f -> band %s, cap %i', (rate, band, cap, allowed) => {

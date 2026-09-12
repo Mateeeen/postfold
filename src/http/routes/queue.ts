@@ -1,10 +1,11 @@
+import { dismissDigest, home } from '../../home.js';
 import { Router } from 'express';
 import { cancelAction, getAction, listPendingActions, listRecentActions } from '../../db/actions.js';
 import { getPerson, setSuggestionStatus } from '../../db/content.js';
 import { clearAutoApprove, setDraftStatus } from '../../db/drafts.js';
 import { getAccountState } from '../../state.js';
 import { resolveAccountId } from '../auth.js';
-import { asyncHandler, notFound, param, refused } from '../util.js';
+import { asyncHandler, badRequest, notFound, param, refused } from '../util.js';
 import type { Action } from '../../types.js';
 
 export const queueRouter = Router();
@@ -70,6 +71,36 @@ async function describe(action: Action): Promise<Record<string, unknown>> {
   const unreachable: never = action.payload;
   return { ...base, label: `Unknown action (${(unreachable as { kind: string }).kind})` };
 }
+
+/** The one queue. Replaces Today, Review, Scheduled and Your posts. */
+queueRouter.get(
+  '/api/home',
+  asyncHandler(async (req, res) => {
+    const accountId = await resolveAccountId(req);
+    if (!accountId) return notFound(res, 'No account connected');
+
+    const [state, feed] = await Promise.all([
+      getAccountState(accountId),
+      home(accountId),
+    ]);
+    res.json({ account: state, ...feed });
+  }),
+);
+
+/** Mark a day's summary read. It does not come back. */
+queueRouter.post(
+  '/api/home/digest/dismiss',
+  asyncHandler(async (req, res) => {
+    const accountId = await resolveAccountId(req);
+    if (!accountId) return notFound(res, 'No account connected');
+
+    const day = typeof req.body?.day === 'string' ? req.body.day : null;
+    if (!day) return badRequest(res, 'day is required.');
+
+    await dismissDigest(accountId, day);
+    res.json({ ok: true });
+  }),
+);
 
 queueRouter.get(
   '/api/queue',

@@ -393,7 +393,7 @@ export const ACCEPTANCE_BANDS: readonly {
   minRate: number;
   multiplier: number;
 }[] = [
-  { band: 'healthy', minRate: 0.4, multiplier: 1 },
+  { band: 'healthy', minRate: 0.3, multiplier: 1 },
   { band: 'watch', minRate: 0.25, multiplier: 0.6 },
   { band: 'throttled', minRate: 0.15, multiplier: 0.3 },
   { band: 'critical', minRate: 0, multiplier: 0 },

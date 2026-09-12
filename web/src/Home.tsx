@@ -17,8 +17,11 @@ import type { AccountState, HomeItem, HomePayload } from './api';
 import { Avatar } from './PostCard';
 
 interface Props {
+  /** Fetched by the shell, because the rail needs the same payload. */
+  data: HomePayload | null;
   onOpen: (item: HomeItem) => void;
   onChanged: () => void;
+  onWrite: () => void;
 }
 
 /** "in 2h 14m". Recomputed on a timer so it actually ticks. */
@@ -181,26 +184,10 @@ function Row({
   );
 }
 
-export function Home({ onOpen, onChanged }: Props): JSX.Element {
-  const [data, setData] = useState<HomePayload | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  const load = useCallback(async (): Promise<void> => {
-    try {
-      setData(await api.home());
-    } catch (e) {
-      setError(e instanceof ApiError ? (e.reason ?? e.message) : 'Could not load.');
-    }
-  }, []);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
-
+export function Home({ data, onOpen, onChanged, onWrite }: Props): JSX.Element {
   const live = (data?.items ?? []).some((i) => i.state === 'going_out');
   const now = useNow(live);
 
-  if (error) return <div className="empty">{error}</div>;
   if (!data) return <div className="empty">Loading…</div>;
 
   const { account, items, digest, autopilot, standing } = data;
@@ -235,7 +222,7 @@ export function Home({ onOpen, onChanged }: Props): JSX.Element {
           <button
             className="link"
             onClick={() => {
-              void api.dismissDigest(digest.day).then(load);
+              void api.dismissDigest(digest.day).then(onChanged);
             }}
           >
             Got it
@@ -252,7 +239,7 @@ export function Home({ onOpen, onChanged }: Props): JSX.Element {
             Drafts appear here as they are written, and anything about to go out shows a
             countdown you can stop.
           </p>
-          <button className="primary" onClick={() => onChanged()}>
+          <button className="primary" onClick={onWrite}>
             Write something now
           </button>
         </div>
@@ -272,10 +259,7 @@ export function Home({ onOpen, onChanged }: Props): JSX.Element {
                 item={i}
                 now={now}
                 onOpen={onOpen}
-                onChanged={() => {
-                  void load();
-                  onChanged();
-                }}
+                onChanged={onChanged}
               />
             ))}
           </div>
@@ -290,10 +274,7 @@ export function Home({ onOpen, onChanged }: Props): JSX.Element {
                     item={i}
                     now={now}
                     onOpen={onOpen}
-                    onChanged={() => {
-                      void load();
-                      onChanged();
-                    }}
+                    onChanged={onChanged}
                   />
                 ))}
               </div>
@@ -302,77 +283,7 @@ export function Home({ onOpen, onChanged }: Props): JSX.Element {
         </>
       )}
 
-      <Standing autopilot={autopilot} standing={standing} account={account} />
     </div>
   );
 }
 
-/**
- * The questions a person should never have to ask, answered in one block.
- *
- * Is autopilot on, what turns it on, when does the next thing go out, and how
- * much of their own writing does this have to work from. None of these are
- * items, so the queue cannot carry them — and all of them were API-only,
- * which meant the only way to find out was to ask me.
- */
-function Standing({
-  autopilot,
-  standing,
-  account,
-}: {
-  autopilot: HomePayload['autopilot'];
-  standing: HomePayload['standing'];
-  account: AccountState;
-}): JSX.Element {
-  const dials: [keyof HomePayload['autopilot'], string][] = [
-    ['post', 'Posts'],
-    ['comment', 'Comments'],
-    ['connect', 'Invitations'],
-  ];
-
-  return (
-    <section className="standing">
-      <div className="standing-head">
-        <h2>Running on its own</h2>
-        {account.nextScheduledAt && (
-          <span className="meta">next out {shortWhen(account.nextScheduledAt)}</span>
-        )}
-      </div>
-
-      <dl className="dials">
-        {dials.map(([key, label]) => {
-          const mode = account.automationModes[key === 'connect' ? 'connect' : key];
-          const state = autopilot[key];
-          const on = mode === 'auto' && state.unlocked;
-          return (
-            <div key={key} className={on ? 'dial on' : 'dial'}>
-              <dt>{label}</dt>
-              <dd>
-                <span className="dial-state">{on ? 'On' : 'You approve each one'}</span>
-                {/* Shown verbatim: it is written as a distance to travel. */}
-                {state.reason && <span className="dial-why">{state.reason}</span>}
-              </dd>
-            </div>
-          );
-        })}
-      </dl>
-
-      <p className="standing-note">
-        Working from <strong>{standing.evidenceDocuments}</strong>{' '}
-        {standing.evidenceDocuments === 1 ? 'piece' : 'pieces'} of your own writing
-        {standing.voiceDocuments > 0 && ` (${standing.voiceDocuments} more can shape the style but not be quoted)`}
-        .{standing.evidenceNeeded ? ` ${standing.evidenceNeeded}` : ''}
-      </p>
-    </section>
-  );
-}
-
-/** "in 2h", "tomorrow". Enough to know whether to wait. */
-function shortWhen(iso: string): string {
-  const mins = Math.round((new Date(iso).getTime() - Date.now()) / 60_000);
-  if (mins <= 0) return 'any moment';
-  if (mins < 60) return `in ${mins}m`;
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) return `in ${hours}h`;
-  return hours < 48 ? 'tomorrow' : `in ${Math.floor(hours / 24)}d`;
-}

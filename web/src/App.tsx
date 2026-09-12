@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { api, ApiError, setToken } from './api';
 import type {
   AccountState,
+  HomePayload,
   Config,
   DraftCard,
   Keyword,
@@ -18,6 +19,7 @@ import { Today } from './Today';
 import { Profile } from './Profile';
 import { Home } from './Home';
 import { Settings } from './Settings';
+import { HomeRail } from './Rail';
 import { Published } from './Published';
 import { Comments } from './Comments';
 import { Trending } from './Trending';
@@ -79,6 +81,7 @@ export function App(): JSX.Element {
   const [posts, setPosts] = useState<PostRow[]>([]);
   const [drafts, setDrafts] = useState<DraftCard[]>([]);
   const [keywords, setKeywords] = useState<Keyword[]>([]);
+  const [homeData, setHomeData] = useState<HomePayload | null>(null);
   const [commentLimit, setCommentLimit] = useState(1250);
   const [lastSearch, setLastSearch] = useState<LastSearch | null>(null);
   const [searchPending, setSearchPending] = useState(false);
@@ -88,13 +91,18 @@ export function App(): JSX.Element {
 
   const refresh = useCallback(async (): Promise<void> => {
     try {
-      const [suggestionsRes, queueRes, postsRes, draftsRes, keywordsRes] = await Promise.all([
-        api.suggestions(),
-        api.queue(),
-        api.posts(),
-        api.drafts(),
-        api.keywords(),
-      ]);
+      const [suggestionsRes, queueRes, postsRes, draftsRes, keywordsRes, homeRes] =
+        await Promise.all([
+          api.suggestions(),
+          api.queue(),
+          api.posts(),
+          api.drafts(),
+          api.keywords(),
+          // Fetched here rather than inside Home, because the right rail needs
+          // the same payload and two components fetching one endpoint is how
+          // they end up disagreeing about what is true.
+          api.home(),
+        ]);
       setAccount(suggestionsRes.account);
       setSuggestions(suggestionsRes.suggestions);
       setPending(queueRes.pending);
@@ -105,6 +113,7 @@ export function App(): JSX.Element {
       setLastSearch(draftsRes.lastSearch);
       setSearchPending(draftsRes.searchPending);
       setKeywords(keywordsRes.keywords);
+      setHomeData(homeRes);
       setFatal(null);
     } catch (e) {
       setFatal(
@@ -332,8 +341,10 @@ export function App(): JSX.Element {
 
       {tab === 'home' && (
         <Home
+          data={homeData}
           onOpen={(item) => setTab(item.kind === 'invite' ? 'connections' : 'drafts')}
-          onChanged={() => setTab('compose')}
+          onChanged={() => void refresh()}
+          onWrite={() => setTab('compose')}
         />
       )}
 
@@ -434,6 +445,13 @@ export function App(): JSX.Element {
         />
       )}
       </main>
+
+      {/* Beside the content, never below it. Empty is an acceptable answer. */}
+      <aside className="side">
+        {tab === 'home' && account && homeData && (
+          <HomeRail account={account} data={homeData} />
+        )}
+      </aside>
     </div>
   );
 }

@@ -97,6 +97,13 @@ specific, hard-to-reverse harm to a real person's LinkedIn account.
     original `CREATE TABLE`, and nothing in the type system knows the
     difference.
 
+    The same mistake wearing different clothes: **grep for the declaration
+    site, not the string.** `timezone?` and `sendDays?` were added to
+    `CreateAccountInput` rather than `AccountPatch`, and a grep for the field
+    name matched the wrong interface, so the edit silently did nothing.
+    Checking that a name exists somewhere is not checking that it exists where
+    it is needed.
+
 ## Things that look wrong and are not
 
 - **better-sqlite3 is synchronous, but every DB function is `async`.** The

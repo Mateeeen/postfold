@@ -99,6 +99,7 @@ export interface AccountState {
     location: string | null;
     profileUrl: string | null;
   };
+  providerOutageUntil: string | null;
   reach: {
     followers: number | null;
     connections: number | null;
@@ -209,6 +210,42 @@ export interface PostAttachment {
   url: string;
   width: number | null;
   height: number | null;
+}
+
+/** One row on Home. Same shape whatever it is. */
+export interface HomeItem {
+  id: string;
+  kind: 'post' | 'comment' | 'invite' | 'withdraw';
+  state: 'needs_you' | 'going_out' | 'sent';
+  preview: string;
+  person: { name: string; avatarUrl: string | null; profileUrl: string | null } | null;
+  reason: string | null;
+  goesOutAt: string | null;
+  unattended: boolean;
+  sentAt: string | null;
+  outcome: string | null;
+}
+
+export interface Digest {
+  day: string;
+  posts: number;
+  comments: number;
+  invites: number;
+  accepted: number;
+  line: string;
+}
+
+export interface UnlockState {
+  unlocked: boolean;
+  /** Display-ready. Shown verbatim as a progress line. */
+  reason: string | null;
+}
+
+export interface HomePayload {
+  account: AccountState;
+  items: HomeItem[];
+  digest: Digest | null;
+  autopilot: Record<'post' | 'comment' | 'connect' | 'withdraw', UnlockState>;
 }
 
 export interface PublishedPost {
@@ -356,6 +393,14 @@ export const api = {
     }),
 
   ideas: () => request<{ ideas: string[] }>('/api/ideas'),
+
+  home: () => request<HomePayload>('/api/home'),
+
+  dismissDigest: (day: string) =>
+    request<{ ok: true }>('/api/home/digest/dismiss', {
+      method: 'POST',
+      body: JSON.stringify({ day }),
+    }),
 
   writePostFrom: (postId: string) =>
     request<{ draft: DraftCard }>(`/api/feed/${encodeURIComponent(postId)}/write-post`, {

@@ -16,6 +16,7 @@ import { Queue } from './Queue';
 import { Drafts } from './Drafts';
 import { Today } from './Today';
 import { Profile } from './Profile';
+import { Home } from './Home';
 import { Published } from './Published';
 import { Comments } from './Comments';
 import { Trending } from './Trending';
@@ -24,6 +25,7 @@ import { Avatar } from './PostCard';
 export type AppConfig = Config;
 
 type Tab =
+  | 'home'
   | 'today'
   | 'compose'
   | 'carousel'
@@ -66,7 +68,7 @@ function canToggleSending(account: AccountState): boolean {
 
 
 export function App(): JSX.Element {
-  const [tab, setTab] = useState<Tab>('today');
+  const [tab, setTab] = useState<Tab>('home');
   const [config, setConfig] = useState<AppConfig | null>(null);
   const [account, setAccount] = useState<AccountState | null>(null);
   const [suggestions, setSuggestions] = useState<SuggestionCard[]>([]);
@@ -241,10 +243,13 @@ export function App(): JSX.Element {
           <nav className="rail-nav">
             <button
               className="rail-link"
-              aria-current={tab === 'today' ? 'page' : undefined}
-              onClick={() => setTab('today')}
+              aria-current={tab === 'home' ? 'page' : undefined}
+              onClick={() => setTab('home')}
             >
-              Today
+              Home
+              {drafts.length + suggestions.length > 0 && (
+                <span className="rail-badge">{drafts.length + suggestions.length}</span>
+              )}
             </button>
 
             {NAV.map(({ group, items }) => (
@@ -310,6 +315,13 @@ export function App(): JSX.Element {
 
       <main className="content">
         {fatal && <div className="banner">{fatal}</div>}
+
+      {tab === 'home' && (
+        <Home
+          onOpen={(item) => setTab(item.kind === 'invite' ? 'connections' : 'drafts')}
+          onChanged={() => setTab('compose')}
+        />
+      )}
 
       {tab === 'today' && account && config && (
         <>
